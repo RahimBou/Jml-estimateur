@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V5</title>
+<title>JML Immobilier — Estimateur V5.4</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -22,7 +22,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3.1 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -62,14 +62,14 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </form>
 
 <section id="result" class="result">
-<div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
-<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Comparables retenus</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
+<div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div><div id="confidence100" class="hint" style="margin-top:8px">Score détaillé : —/100</div>
+<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
-<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p></div>
+<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">💡 V5.4 : une recherche transactionnelle large, puis sélection locale des comparables. Les réponses répétées sont mises en cache temporairement.</p></div>
 
 <div class="card"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary"></div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+<div class="card"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="comparison">Analyse de fiabilité en cours…</div><div id="reliabilityCriteria" class="sources" style="margin-top:12px"></div></div>\n\n<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><p id="apiWarning" class="hint" style="display:none"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
 <div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
 </section>
@@ -91,7 +91,12 @@ $('form').addEventListener('submit', async e => {
   };
   try{
     const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data=await r.json(); if(!r.ok) throw new Error(data.error||'Erreur pendant l’analyse');
+    const data=await r.json(); if(!r.ok) {
+      const msg = data.code === 'INSUFFICIENT_BALANCE'
+        ? 'Le solde Immo Data est insuffisant. Le moteur a été configuré pour limiter les appels API.'
+        : (data.error||'Erreur pendant l’analyse');
+      throw new Error(msg);
+    }
     render(data);
   }catch(err){ $('error').innerHTML='<div class="error">'+escapeHtml(err.message)+'</div>'; }
   finally{ $('loading').style.display='none'; $('submit').disabled=false; }
@@ -102,19 +107,24 @@ function render(d){
   $('main').textContent=euro(d.estimate.main);
   $('range').textContent='Fourchette indicative : '+euro(d.estimate.low)+' → '+euro(d.estimate.high);
   $('confidence').textContent='Fiabilité : '+d.estimate.confidence+'/5';
-  const rel=d.method.reliability||{};
-  $('reliabilitySummary').innerHTML='<b>'+escapeHtml(d.estimate.confidenceLabel||'—')+'</b> · score '+(d.estimate.confidenceScore??'—')+'/100. La fourchette tient compte de la dispersion des ventes et de l\'accord entre les sources.';
-  $('reliability').innerHTML=(rel.factors||[]).map(f=>`<div class="relRow"><div class="relTop"><span>${escapeHtml(f.label)}</span><span>${f.score}/${f.max}</span></div><div class="relMeta">${escapeHtml(f.detail)}</div><div class="relBar"><i style="width:${Math.max(0,Math.min(100,(f.score/f.max)*100))}%"></i></div></div>`).join('');
+  if($('confidence100')) $('confidence100').textContent='Score détaillé : '+(d.estimate.confidenceScore100 ?? '—')+'/100';
   $('ppsm').textContent=euro(d.estimate.pricePerSqm);
   $('txCount').textContent=String(d.sources.comparables.total||0);
-  $('txCount').title=(d.sources.comparables.foundCount||d.sources.comparables.total||0)+' transactions analysées';
   $('window').textContent=d.method.comparableWindow;
-  $('selection').textContent=d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m · '+(d.sources.comparables.foundCount||d.sources.comparables.total||0)+' transactions analysées → '+(d.sources.comparables.total||0)+' retenues';
-  $('method').textContent=d.method.note;
+  $('selection').textContent=(d.method.comparableSelection||'')+' · rayon '+d.sources.comparables.radiusMeters+' m · '+(d.sources.comparables.totalFound||0)+' transaction(s) analysée(s)';
+  $('method').textContent=d.method.note+' '+(d.method.budgetNote||'');
   const sourceRows=d.signals||[];
   $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids dans le calcul : ${s.weight}%</div></div>`).join('');
+
+  const rel=d.reliability;
+  if(rel){
+    const label=rel.score100>=80?'Élevée':rel.score100>=60?'Bonne':rel.score100>=40?'Modérée':'Limitée';
+    $('reliabilitySummary').innerHTML='<b>'+label+' · '+rel.score100+'/100</b><br><span class="hint">La fiabilité combine quantité, proximité, récence, similarité, dispersion et cohérence des sources.</span>';
+    $('reliabilityCriteria').innerHTML=(rel.criteria||[]).map(c=>`<div class="source"><div class="top"><b>${escapeHtml(c.name)}</b><strong>${c.points}/${c.max}</strong></div><div class="bar"><i style="width:${Math.max(0,Math.min(100,c.points/c.max*100))}%"></i></div></div>`).join('');
+  }
+
   const tx=d.sources.comparables.data||[];
-  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td>${Number.isFinite(x.score)?x.score+'/100':'—'}</td><td>${Number.isFinite(x.influence)?x.influence.toFixed(1)+' %':'—'}</td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
+  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td>${Number(x.score||0).toFixed(0)}/100</td><td>${Number(x.influence||0).toFixed(1)}%</td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
   $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
 }
 
