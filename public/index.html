@@ -1,190 +1,368 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V5</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JML Immobilier — Estimateur V5.6</title>
+
 <style>
-:root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
-*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--brand);color:#fff;padding:20px 16px}header .wrap{max-width:980px;margin:auto;display:flex;align-items:center;gap:14px}.logo{width:52px;height:52px;border:2px solid #fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900}.title{font-size:20px;font-weight:900}.sub{font-size:13px;opacity:.85;margin-top:4px}
-main{max-width:980px;margin:22px auto;padding:0 14px}.card{background:var(--paper);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 18px #0000000a;border:1px solid #e8edf2}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
-h2{font-size:18px;margin:0 0 16px}.hint{color:var(--muted);font-size:13px;line-height:1.45}.note{background:var(--soft);border-left:4px solid var(--brand);padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}.lock{background:var(--warn);border-left:4px solid #c28a00;padding:12px 14px;border-radius:8px;font-size:13px;margin-top:16px}
-label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff}input:focus,select:focus,textarea:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
-.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.check{border:1px solid var(--line);padding:10px;border-radius:9px;display:flex;gap:8px;align-items:center;font-size:13px}.check input{width:auto}
-button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}button:disabled{opacity:.55;cursor:wait}
-.typeGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.typeBtn{margin:0!important;padding:11px 8px!important;background:#fff!important;color:var(--ink)!important;border:1px solid var(--line)!important;font-size:13px!important;font-weight:800!important}.typeBtn.active{background:var(--soft)!important;border:2px solid var(--brand)!important;color:var(--brand)!important}.typeBtn span{display:block;font-size:21px;margin-bottom:3px}@media(max-width:700px){.typeGrid{grid-template-columns:repeat(2,1fr)}}.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
-.result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}.confidenceDetail{margin-top:8px;color:var(--muted);font-size:13px}.reliability{display:grid;gap:10px}.relRow{border:1px solid var(--line);border-radius:10px;padding:11px}.relTop{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:800}.relMeta{font-size:12px;color:var(--muted);margin-top:4px}.relBar{height:6px;background:#e8edf2;border-radius:99px;overflow:hidden;margin-top:8px}.relBar i{display:block;height:100%;background:var(--brand)}.relSummary{background:var(--soft);border-radius:10px;padding:12px;font-size:13px;line-height:1.5}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
-.sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
-.tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
-.compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
+:root{
+  --ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;
+  --bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--danger:#fff0f0;
+  --accent:#2f6b4f;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--brand);color:#fff;padding:20px 16px}
+header .wrap{max-width:1080px;margin:auto;display:flex;align-items:center;gap:14px}
+.logo{width:52px;height:52px;border:2px solid #fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900}
+.title{font-size:20px;font-weight:900}.sub{font-size:13px;opacity:.85;margin-top:4px}
+main{max-width:1080px;margin:22px auto;padding:0 14px}
+.card{background:var(--paper);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 18px #0000000a;border:1px solid #e8edf2}
+.section-title{font-size:18px;font-weight:900;margin:0 0 6px}
+.section-sub{font-size:13px;color:var(--muted);margin:0 0 18px;line-height:1.45}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.full{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
+.type-zone{background:#f7faf8;border:1px solid #dce9e1;border-radius:14px;padding:14px}
+.type-label{font-size:13px;font-weight:900;margin-bottom:8px}
+#realtyType{font-size:16px;font-weight:800;padding:14px;border:2px solid #b8cebf;background:#fff}
+.category-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:10px}
+.category-btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:11px 7px;cursor:pointer;font-size:12px;font-weight:800;min-height:58px}
+.category-btn:hover{border-color:var(--brand)}
+.category-btn.active{background:var(--soft);border:2px solid var(--brand);padding:10px 6px}
+.dynamic-card{margin-top:14px;padding:15px;border:1px solid #dce9e1;border-radius:12px;background:#fbfdfc}
+.dynamic-title{font-size:14px;font-weight:900;margin-bottom:12px}
+.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.check{border:1px solid var(--line);padding:10px;border-radius:9px;display:flex;gap:8px;align-items:center;font-size:13px;background:#fff}
+.check input{width:auto}
+button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}
+button:disabled{opacity:.55;cursor:wait}
+.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}
+.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
+.result{display:none}
+.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}
+.range{font-size:16px;color:var(--muted)}
+.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}
+.fact span{font-size:12px;color:var(--muted)}
+.sources,.reliability{display:grid;gap:10px}.source,.relRow{border:1px solid var(--line);border-radius:10px;padding:12px}
+.source .top,.relTop{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}
+.bar,.relBar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}
+.bar i,.relBar i{display:block;height:100%;background:var(--brand)}
+.hint{color:var(--muted);font-size:13px;line-height:1.45}.relMeta{font-size:12px;color:var(--muted);margin-top:4px}
+.relSummary,.comparison{background:var(--soft);border-radius:10px;padding:12px;font-size:13px;line-height:1.5}
+.tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
+.compare{display:none;margin-top:16px}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
+@media(max-width:800px){.category-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
 </style>
+
 </head>
+
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.3 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div>
+<div class="title">Estimateur JML Immobilier</div>
+<div class="sub">V6.1 — MODE GRATUIT · version reconstruite et testée</div>
+</div></div></header>
+
 <main>
 <form id="form">
 <div class="card">
-<h2>📍 Le bien</h2>
-<div class="grid">
-<div class="full"><label>Adresse complète</label><input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières"></div>
-<div>
-<label>Type de bien</label>
-<select id="realtyType" name="realtyType">
-  <option value="house">🏠 Maison</option>
-  <option value="apartment">🏢 Appartement</option>
-  <option value="building">🏬 Immeuble</option>
-  <option value="garage">🚗 Garage</option>
-  <option value="parking">🅿️ Parking</option>
-  <option value="land">🌳 Terrain constructible</option>
-  <option value="agricultural_land">🌾 Terrain agricole</option>
-  <option value="commercial">🏪 Local commercial</option>
-  <option value="industrial">🏭 Local industriel / entrepôt</option>
-  <option value="other">🏠 Autre bien</option>
-</select>
-<div id="typeGrid" class="typeGrid" aria-label="Choisir le type de bien"></div>
+  <div class="section-title">📍 Le bien</div>
+  <p class="section-sub">Décrivez le bien. Les caractéristiques sont adaptées automatiquement à sa catégorie.</p>
+
+  <div class="type-zone">
+    <div class="type-label">1. TYPE DE BIEN</div>
+    <select id="realtyType" required>
+      <option value="house">🏠 Maison</option>
+      <option value="apartment">🏢 Appartement</option>
+      <option value="building">🏬 Immeuble</option>
+      <option value="garage">🚗 Garage</option>
+      <option value="parking">🅿️ Parking</option>
+      <option value="land">🌳 Terrain constructible</option>
+      <option value="agricultural_land">🌾 Terrain agricole</option>
+      <option value="commercial">🏪 Local commercial</option>
+      <option value="industrial">🏭 Local industriel / entrepôt</option>
+      <option value="other">🏠 Autre bien</option>
+    </select>
+    <div id="categoryGrid" class="category-grid"></div>
+  </div>
+
+  <div class="grid" style="margin-top:14px">
+    <div class="full">
+      <label>Adresse complète</label>
+      <input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières">
+    </div>
+    <div id="fieldLivingArea"><label id="livingAreaLabel">Surface habitable (m²)</label><input id="livingArea" type="number" min="1" step="1" required></div>
+    <div id="fieldLandArea"><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
+    <div id="fieldRooms"><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
+    <div id="fieldBathrooms"><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
+    <div id="fieldConstruction"><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
+    <div id="fieldDpe"><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+  </div>
+
+  <div id="dynamicFields" class="dynamic-card"></div>
 </div>
-<div id="fieldLivingArea"><label id="livingAreaLabel">Surface habitable (m²)</label><input id="livingArea" type="number" min="1" step="1" required placeholder="120"></div>
-<div id="fieldLandArea"><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
-<div id="fieldRooms"><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
-<div id="fieldBathrooms"><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
-<div id="fieldConstruction"><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
-<div id="fieldDpe"><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
-<div id="dynamicFields" class="full"></div>
 
 <div class="card">
-<h2 id="characteristicsTitle">🏠 Caractéristiques — Maison</h2>
-<div class="grid">
-<div><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
-<div class="hint" id="characteristicsHint">Les caractéristiques servent à comparer le bien aux ventes réelles.</div>
-<div class="full"><label>Équipements</label><div class="checks" id="equipmentFields">
-<label class="check"><input id="garage" type="checkbox"> Garage</label>
-<label class="check"><input id="parking" type="checkbox"> Parking</label>
-<label class="check"><input id="cellar" type="checkbox"> Cave</label>
-<label class="check"><input id="terrace" type="checkbox"> Terrasse</label>
-<label class="check"><input id="patio" type="checkbox"> Cour / patio</label>
-<label class="check"><input id="niceView" type="checkbox"> Belle vue</label>
-</div></div>
-</div>
-</div></div>
+  <div class="section-title" id="characteristicsTitle">🏠 Caractéristiques — Maison</div>
+  <p class="section-sub" id="characteristicsHint">Les caractéristiques servent à comparer le bien aux ventes réelles.</p>
 
-<div class="note">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne pourra donc pas influencer le calcul.</div>
-<button id="submit" type="submit">ANALYSER LE BIEN</button>
-<div id="loading" class="loading">⏳ Analyse en cours : géocodage, estimation, quartier et ventes DVF comparables…</div>
-<div id="error"></div>
+  <div class="grid">
+    <div><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
+    <div></div>
+    <div class="full"><label>Équipements</label><div class="checks" id="equipmentFields">
+      <label class="check"><input id="garage" type="checkbox"> Garage</label>
+      <label class="check"><input id="parking" type="checkbox"> Parking</label>
+      <label class="check"><input id="cellar" type="checkbox"> Cave</label>
+      <label class="check"><input id="terrace" type="checkbox"> Terrasse</label>
+      <label class="check"><input id="patio" type="checkbox"> Cour / patio</label>
+      <label class="check"><input id="niceView" type="checkbox"> Belle vue</label>
+    </div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="hint">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne pourra donc pas influencer le calcul.</div>
+  <button id="submit" type="submit">ANALYSER LE BIEN</button>
+  <div id="loading" class="loading">⏳ Analyse en cours : géocodage, estimation, quartier et ventes DVF comparables…</div>
+  <div id="error"></div>
+</div>
 </form>
 
 <section id="result" class="result">
-<div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
-<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
+  <div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
+  <div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
-<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">🆓 MODE GRATUIT : aucune requête Immo Data n’est effectuée et aucun crédit n’est consommé. Les données sont simulées localement pour tester le moteur. · 💡 V5.5.2 : chaque source reçoit un score de qualité indépendant ; son poids est ensuite ajusté selon son accord avec le consensus robuste. Ce n’est pas une moyenne fixe.</p></div>
+  <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">🆓 MODE GRATUIT : aucune requête Immo Data n’est effectuée et aucun crédit n’est consommé.</p></div>
 
-<div class="card" id="reliabilityCard"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
+  <div class="card" id="reliabilityCard"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><p id="filterInfo" class="hint" style="display:none"></p><p id="apiWarning" class="hint" style="display:none"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+  <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><p id="filterInfo" class="hint" style="display:none"></p><p id="apiWarning" class="hint" style="display:none"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
-<div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
+  <div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
 </section>
-</main>
+
+
 <script>
 const euro = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(n)||0);
 let estimateValue = 0;
 const $ = id => document.getElementById(id);
 
 const propertyProfiles = {
-  house:{title:'🏠 Caractéristiques — Maison', hint:'Maison : terrain, pièces, DPE, état et équipements influencent l’analyse.', living:'Surface habitable (m²)', placeholder:'120', fields:[['fieldLandArea',true],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]], extras:['garage','parking','cellar','terrace','patio','niceView']},
-  apartment:{title:'🏢 Caractéristiques — Appartement', hint:'Appartement : étage, ascenseur, extérieur, parking et DPE sont particulièrement utiles.', living:'Surface habitable (m²)', placeholder:'65', fields:[['fieldLandArea',false],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]], extras:['parking','cellar','terrace','niceView']},
-  building:{title:'🏬 Caractéristiques — Immeuble', hint:'Immeuble : surface totale, nombre de logements, terrain, état et rendement.', living:'Surface totale (m²)', placeholder:'300', fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',true],['fieldDpe',true]], extras:['parking','garage','cellar']},
-  garage:{title:'🚗 Caractéristiques — Garage', hint:'Garage : surface, accès, électricité et emplacement.', living:'Surface du garage (m²)', placeholder:'20', fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]], extras:['garage']},
-  parking:{title:'🅿️ Caractéristiques — Parking', hint:'Parking : type d’emplacement, accès et sécurité.', living:'Surface / emprise (m²)', placeholder:'12', fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]], extras:['parking']},
-  land:{title:'🌳 Caractéristiques — Terrain constructible', hint:'Terrain : surface, constructibilité, viabilisation et accès sont déterminants.', living:'Surface du terrain (m²)', placeholder:'500', fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]], extras:[]},
-  agricultural_land:{title:'🌾 Caractéristiques — Terrain agricole', hint:'Terrain agricole : surface, accès, nature et possibilités d’exploitation.', living:'Surface du terrain (m²)', placeholder:'5000', fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]], extras:[]},
-  commercial:{title:'🏪 Caractéristiques — Local commercial', hint:'Local commercial : surface, vitrine, emplacement, accès et état.', living:'Surface du local (m²)', placeholder:'100', fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]], extras:['parking']},
-  industrial:{title:'🏭 Caractéristiques — Local industriel / entrepôt', hint:'Entrepôt : surface, terrain, accès, hauteur et état.', living:'Surface du bâtiment (m²)', placeholder:'500', fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',true],['fieldDpe',false]], extras:['parking','garage']},
-  other:{title:'🏠 Caractéristiques — Autre bien', hint:'Renseignez les caractéristiques disponibles pour obtenir une estimation indicative.', living:'Surface principale (m²)', placeholder:'100', fields:[['fieldLandArea',true],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]], extras:['parking','garage','cellar','terrace','patio','niceView']}
+ house:{title:'🏠 Caractéristiques — Maison',hint:'Maison : terrain, pièces, DPE, état et équipements.',living:'Surface habitable (m²)',placeholder:'120',fields:[['fieldLandArea',true],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]],extras:['garage','parking','cellar','terrace','patio','niceView']},
+ apartment:{title:'🏢 Caractéristiques — Appartement',hint:'Appartement : étage, ascenseur, extérieur, parking et DPE.',living:'Surface habitable (m²)',placeholder:'65',fields:[['fieldLandArea',false],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]],extras:['parking','cellar','terrace','niceView']},
+ building:{title:'🏬 Caractéristiques — Immeuble',hint:'Immeuble : surface totale, logements, terrain, état et rendement.',living:'Surface totale (m²)',placeholder:'300',fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',true],['fieldDpe',true]],extras:['parking','garage','cellar']},
+ garage:{title:'🚗 Caractéristiques — Garage',hint:'Garage : surface, accès, électricité et emplacement.',living:'Surface du garage (m²)',placeholder:'20',fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]],extras:['garage']},
+ parking:{title:'🅿️ Caractéristiques — Parking',hint:'Parking : emplacement, accès et sécurité.',living:'Surface / emprise (m²)',placeholder:'12',fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]],extras:['parking']},
+ land:{title:'🌳 Caractéristiques — Terrain constructible',hint:'Terrain : surface, constructibilité, viabilisation et accès.',living:'Surface du terrain (m²)',placeholder:'500',fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]],extras:[]},
+ agricultural_land:{title:'🌾 Caractéristiques — Terrain agricole',hint:'Terrain agricole : surface, accès, nature et exploitation.',living:'Surface du terrain (m²)',placeholder:'5000',fields:[['fieldLandArea',false],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',false],['fieldDpe',false]],extras:[]},
+ commercial:{title:'🏪 Caractéristiques — Local commercial',hint:'Local commercial : vitrine, activité, emplacement, accès et état.',living:'Surface du local (m²)',placeholder:'100',fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]],extras:['parking']},
+ industrial:{title:'🏭 Caractéristiques — Local industriel / entrepôt',hint:'Entrepôt : surface, terrain, accès poids lourds, hauteur et état.',living:'Surface du bâtiment (m²)',placeholder:'500',fields:[['fieldLandArea',true],['fieldRooms',false],['fieldBathrooms',false],['fieldConstruction',true],['fieldDpe',false]],extras:['parking','garage']},
+ other:{title:'🏠 Caractéristiques — Autre bien',hint:'Renseignez les caractéristiques disponibles.',living:'Surface principale (m²)',placeholder:'100',fields:[['fieldLandArea',true],['fieldRooms',true],['fieldBathrooms',true],['fieldConstruction',true],['fieldDpe',true]],extras:['parking','garage','cellar','terrace','patio','niceView']}
 };
 
-function updatePropertyFields(){
-  const type=$('realtyType').value;
-  const p=propertyProfiles[type]||propertyProfiles.house;
-  $('characteristicsTitle').textContent=p.title;
-  $('characteristicsHint').textContent=p.hint;
-  $('livingAreaLabel').textContent=p.living;
-  $('livingArea').placeholder=p.placeholder;
-  p.fields.forEach(([id,show])=>{ const el=$(id); if(el) el.style.display=show?'block':'none'; });
-  const all=['garage','parking','cellar','terrace','patio','niceView'];
-  all.forEach(id=>{ const el=$(id)?.closest('.check'); if(el) el.style.display=p.extras.includes(id)?'flex':'none'; });
-  if(type==='land'||type==='agricultural_land') $('landArea').value=$('livingArea').value||'';
-  const df=$('dynamicFields');
-  const html={
-    apartment:`<div class=\"grid\"><div><label>Étage</label><input id=\"floor\" type=\"number\" min=\"0\" placeholder=\"2\"></div><div><label>Ascenseur</label><label class=\"check\"><input id=\"elevator\" type=\"checkbox\"> Oui</label></div><div><label>Balcon / terrasse</label><label class=\"check\"><input id=\"balcony\" type=\"checkbox\"> Oui</label></div></div>`,
-    building:`<div class=\"grid\"><div><label>Nombre de logements</label><input id=\"units\" type=\"number\" min=\"1\" placeholder=\"4\"></div><div><label>Rendement locatif (%)</label><input id=\"yield\" type=\"number\" min=\"0\" step=\"0.1\"></div></div>`,
-    land:`<div class=\"grid\"><div><label>Constructibilité</label><select id=\"buildable\"><option value=\"\">Non renseigné</option><option>Constructible</option><option>Partiellement constructible</option><option>Non constructible</option></select></div><div><label>Viabilisation</label><select id=\"serviced\"><option value=\"\">Non renseigné</option><option>Viabilisé</option><option>Partiellement viabilisé</option><option>Non viabilisé</option></select></div><div><label>Façade (m)</label><input id=\"frontage\" type=\"number\" min=\"0\" step=\"0.1\"></div></div>`,
-    agricultural_land:`<div class=\"grid\"><div><label>Accès</label><select id=\"access\"><option value=\"\">Non renseigné</option><option>Direct</option><option>Chemin rural</option></select></div><div><label>Viabilisation</label><select id=\"serviced\"><option value=\"\">Non renseigné</option><option>Oui</option><option>Non</option></select></div></div>`,
-    commercial:`<div class=\"grid\"><div><label>Vitrine</label><label class=\"check\"><input id=\"windowDisplay\" type=\"checkbox\"> Oui</label></div><div><label>Type d’activité</label><input id=\"commercialType\" placeholder=\"Commerce, bureau…\"></div></div>`,
-    industrial:`<div class=\"grid\"><div><label>Hauteur sous plafond (m)</label><input id=\"ceilingHeight\" type=\"number\" min=\"0\" step=\"0.1\"></div><div><label>Accès poids lourds</label><label class=\"check\"><input id=\"heavyVehicleAccess\" type=\"checkbox\"> Oui</label></div></div>`
-  };
-  df.innerHTML=html[type]||'';
-}
-document.addEventListener('DOMContentLoaded', () => {
-  const typeSelect = $('realtyType');
+const categories=[
+ ['house','🏠','Maison'],['apartment','🏢','Appartement'],['building','🏬','Immeuble'],
+ ['garage','🚗','Garage'],['parking','🅿️','Parking'],['land','🌳','Terrain constructible'],
+ ['agricultural_land','🌾','Terrain agricole'],['commercial','🏪','Local commercial'],
+ ['industrial','🏭','Local industriel'],['other','🏠','Autre bien']
+];
 
-  // Sécurité : reconstruit toujours la liste complète des types.
-  // Cela évite qu'une ancienne version/copie du HTML ne laisse seulement
-  // « Maison » et « Appartement » visibles.
-  const typeOptions = [
-    ['house','🏠 Maison'],
-    ['apartment','🏢 Appartement'],
-    ['building','🏬 Immeuble'],
-    ['garage','🚗 Garage'],
-    ['parking','🅿️ Parking'],
-    ['land','🌳 Terrain constructible'],
-    ['agricultural_land','🌾 Terrain agricole'],
-    ['commercial','🏪 Local commercial'],
-    ['industrial','🏭 Local industriel / entrepôt'],
-    ['other','🏠 Autre bien']
-  ];
 
-  const currentType = typeSelect.value || 'house';
-  typeSelect.innerHTML = typeOptions
-    .map(([value,label]) => `<option value="${value}">${label}</option>`)
-    .join('');
-  typeSelect.value = typeOptions.some(([value]) => value === currentType)
-    ? currentType
-    : 'house';
+const categorySpecific = {
+  apartment: {
+    title: 'Caractéristiques spécifiques — Appartement',
+    fields: [
+      ['floor','Étage','number','', '2'],
+      ['elevator','Ascenseur','checkbox','', ''],
+      ['balcony','Balcon / terrasse','checkbox','', '']
+    ]
+  },
+  building: {
+    title: 'Caractéristiques spécifiques — Immeuble',
+    fields: [
+      ['units','Nombre de logements','number','', '4'],
+      ['yield','Rendement locatif (%)','number','0.1','']
+    ]
+  },
+  land: {
+    title: 'Caractéristiques spécifiques — Terrain constructible',
+    fields: [
+      ['buildable','Constructibilité','select','', ''],
+      ['serviced','Viabilisation','select','', ''],
+      ['frontage','Façade (m)','number','0.1','']
+    ]
+  },
+  agricultural_land: {
+    title: 'Caractéristiques spécifiques — Terrain agricole',
+    fields: [
+      ['access','Accès','select','', ''],
+      ['serviced','Viabilisation','select','', '']
+    ]
+  },
+  commercial: {
+    title: 'Caractéristiques spécifiques — Local commercial',
+    fields: [
+      ['windowDisplay','Vitrine','checkbox','', ''],
+      ['commercialType','Type d’activité','text','', 'Commerce, bureau…']
+    ]
+  },
+  industrial: {
+    title: 'Caractéristiques spécifiques — Local industriel / entrepôt',
+    fields: [
+      ['ceilingHeight','Hauteur sous plafond (m)','number','0.1',''],
+      ['heavyVehicleAccess','Accès poids lourds','checkbox','', '']
+    ]
+  }
+};
 
-  // Sélecteur visuel : toutes les catégories restent visibles, même sur mobile.
-  const typeGrid = $('typeGrid');
-  typeGrid.innerHTML = typeOptions.map(([value,label]) => {
-    const parts = label.split(' ');
-    const emoji = parts.shift();
-    const text = parts.join(' ');
-    return `<button type="button" class="typeBtn" data-type="${value}"><span>${emoji}</span>${text}</button>`;
-  }).join('');
+const selectChoices = {
+  buildable: ['Non renseigné','Constructible','Partiellement constructible','Non constructible'],
+  serviced: ['Non renseigné','Viabilisé','Partiellement viabilisé','Non viabilisé'],
+  access: ['Non renseigné','Direct','Chemin rural']
+};
 
-  function syncTypeButtons(){
-    typeGrid.querySelectorAll('.typeBtn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.type === typeSelect.value);
-    });
+function makeSpecificControl(id, label, type, step, placeholder) {
+  const wrap = document.createElement('div');
+  const lab = document.createElement('label');
+  lab.textContent = label;
+
+  if (type === 'checkbox') {
+    const box = document.createElement('label');
+    box.className = 'check';
+    const input = document.createElement('input');
+    input.id = id;
+    input.type = 'checkbox';
+    box.appendChild(input);
+    box.appendChild(document.createTextNode(' Oui'));
+    wrap.appendChild(lab);
+    wrap.appendChild(box);
+    return wrap;
   }
 
-  typeGrid.addEventListener('click', e => {
-    const btn = e.target.closest('.typeBtn');
-    if (!btn) return;
-    typeSelect.value = btn.dataset.type;
-    updatePropertyFields();
-    syncTypeButtons();
+  const input = document.createElement('input');
+  input.id = id;
+  input.type = type;
+  if (step) input.step = step;
+  if (placeholder) input.placeholder = placeholder;
+
+  wrap.appendChild(lab);
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function makeSpecificSelect(id, label) {
+  const wrap = document.createElement('div');
+  const lab = document.createElement('label');
+  lab.textContent = label;
+
+  const select = document.createElement('select');
+  select.id = id;
+
+  (selectChoices[id] || ['Non renseigné']).forEach(value => {
+    const option = document.createElement('option');
+    option.value = value === 'Non renseigné' ? '' : value;
+    option.textContent = value;
+    select.appendChild(option);
   });
 
-  typeSelect.addEventListener('change', () => {
-    updatePropertyFields();
-    syncTypeButtons();
+  wrap.appendChild(lab);
+  wrap.appendChild(select);
+  return wrap;
+}
+
+
+function updatePropertyFields() {
+  const type = $('realtyType').value;
+  const p = propertyProfiles[type] || propertyProfiles.house;
+
+  $('characteristicsTitle').textContent = p.title;
+  $('characteristicsHint').textContent = p.hint;
+  $('livingAreaLabel').textContent = p.living;
+  $('livingArea').placeholder = p.placeholder;
+
+  p.fields.forEach(([id, show]) => {
+    const el = $(id);
+    if (el) el.closest('div').style.display = show ? 'block' : 'none';
   });
 
-  updatePropertyFields();
-  syncTypeButtons();
+  ['garage','parking','cellar','terrace','patio','niceView'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      const row = el.closest('.check');
+      if (row) row.style.display = p.extras.includes(id) ? 'flex' : 'none';
+    }
+  });
+
+  if (type === 'land' || type === 'agricultural_land') {
+    $('landArea').value = $('livingArea').value || '';
+  }
+
+  const container = $('dynamicFields');
+  container.replaceChildren();
+
+  const specific = categorySpecific[type];
+
+  if (!specific) {
+    const empty = document.createElement('div');
+    empty.className = 'dynamic-title';
+    empty.textContent = 'Aucune caractéristique supplémentaire pour cette catégorie.';
+    container.appendChild(empty);
+  } else {
+    const title = document.createElement('div');
+    title.className = 'dynamic-title';
+    title.textContent = specific.title;
+    container.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    specific.fields.forEach(([id,label,type,step,placeholder]) => {
+      if (type === 'select') {
+        grid.appendChild(makeSpecificSelect(id,label));
+      } else {
+        grid.appendChild(makeSpecificControl(id,label,type,step,placeholder));
+      }
+    });
+
+    container.appendChild(grid);
+  }
+
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+}
+
+
+function buildCategoryButtons() {
+  const grid = $('categoryGrid');
+  grid.replaceChildren();
+
+  categories.forEach(([value, icon, label]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'category-btn';
+    button.dataset.type = value;
+    button.textContent = icon + ' ' + label;
+
+    button.addEventListener('click', () => {
+      $('realtyType').value = value;
+      updatePropertyFields();
+    });
+
+    grid.appendChild(button);
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+ buildCategoryButtons();
+ $('realtyType').addEventListener('change',updatePropertyFields);
+ updatePropertyFields();
 });
 
 $('form').addEventListener('submit', async e => {
@@ -211,6 +389,7 @@ $('form').addEventListener('submit', async e => {
   }catch(err){ $('error').innerHTML='<div class="error">'+escapeHtml(err.message)+'</div>'; }
   finally{ $('loading').style.display='none'; $('submit').disabled=false; }
 });
+
 
 function render(d){
   estimateValue=d.estimate.main;
@@ -240,13 +419,7 @@ $('compareBtn').onclick=()=>{
   $('comparison').innerHTML='<b>Estimation JML :</b> '+euro(estimateValue)+'<br><b>Prix envisagé :</b> '+euro(owner)+'<br><b>Écart :</b> '+(diff>=0?'+':'')+euro(diff)+' ('+(pct>=0?'+':'')+pct.toFixed(1)+' %)';
 };
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
-
-// Nettoyage défensif : évite l'affichage de anciens blocs/échappements issus d'un cache.
-(function(){
-  document.querySelectorAll('body *').forEach(el=>{
-    if(el.childNodes.length===1 && el.firstChild.nodeType===3 && /^(\s*\\n)+\s*$/.test(el.textContent)) el.remove();
-  });
-})();
 </script>
+
 </body>
 </html>
