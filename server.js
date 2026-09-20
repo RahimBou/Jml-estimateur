@@ -15,8 +15,6 @@ const MOCK_API_MODE = /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE ||
 const COMPARABLE_MIN_PPSM = Math.max(0, cleanNumber(process.env.COMPARABLE_MIN_PPSM, 400));
 const COMPARABLE_ROBUST_MULT = Math.max(0.5, cleanNumber(process.env.COMPARABLE_ROBUST_MULT, 1.5));
 const IMMO_BASE = "https://api.immo-data.fr";
-const VALID_REALTY_TYPES = new Set(["house","apartment","building","garage","parking","land","agricultural_land","commercial","industrial","other"]);
-const VALUATION_REALTY_TYPES = new Set(["house","apartment"]);
 
 app.use(express.json({ limit: "100kb" }));
 app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false, maxAge: 0 }));
@@ -410,8 +408,57 @@ function weightedMedian(items, valueFn, weightFn) {
   return rows[rows.length - 1].value;
 }
 
+function characteristicAdjustment(subject) {
+  // Ajustements JML volontairement plafonnés : ils affinent les ventes et le prix
+  // de secteur sans pouvoir remplacer les données de marché.
+  const f = subject?.propertyFeatures || {};
+  let pct = 0;
+  const reasons = [];
+  const add = (value, label) => { pct += value; if (value) reasons.push(`${label} ${value > 0 ? '+' : ''}${value}%`); };
+
+  const condition = String(subject?.condition || '').toLowerCase();
+  if (condition === 'excellent') add(6, 'état excellent');
+  else if (condition === 'very_good') add(4, 'très bon état');
+  else if (condition === 'good') add(2, 'bon état');
+  else if (condition === 'refresh') add(-4, 'à rafraîchir');
+  else if (condition === 'major_work') add(-9, 'travaux importants');
+
+  const dpe = String(subject?.dpe || '').toUpperCase();
+  if (dpe === 'A' || dpe === 'B') add(3, `DPE ${dpe}`);
+  else if (dpe === 'E') add(-2, 'DPE E');
+  else if (dpe === 'F') add(-5, 'DPE F');
+  else if (dpe === 'G') add(-8, 'DPE G');
+
+  if (subject?.terrace || f.balcony) add(2, 'extérieur');
+  if (subject?.garage) add(2, 'garage');
+  else if (subject?.parking) add(1, 'parking');
+  if (subject?.cellar) add(1, 'cave');
+  if (subject?.niceView) add(2, 'vue');
+  if (f.elevator) add(2, 'ascenseur');
+
+  const floor = Number(f.floor);
+  if (subject?.realtyType === 'apartment' && Number.isFinite(floor)) {
+    if (floor === 0) add(-2, 'rez-de-chaussée');
+    else if (floor >= 4 && f.elevator) add(2, 'étage élevé avec ascenseur');
+    else if (floor >= 2) add(1, 'étage');
+  }
+
+  // Pour les terrains, les facteurs dédiés remplacent les équipements résidentiels.
+  if (subject?.realtyType === 'land') {
+    if (String(f.buildable || '').toLowerCase().includes('constructible')) add(5, 'constructibilité');
+    if (String(f.serviced || '').toLowerCase().includes('viabil')) add(3, 'viabilisation');
+  }
+
+  const capped = clamp(pct, -12, 12);
+  return { factor: 1 + capped / 100, percent: capped, reasons };
+}
+
 function sourceQualityAndValue({ valuation, districtPrice, comparables, subject }) {
   const out = [];
+  const adjustment = characteristicAdjustment(subject);
+  const adjustmentLabel = adjustment.percent === 0
+    ? 'aucun ajustement caractéristique'
+    : `ajustement JML ${adjustment.percent > 0 ? '+' : ''}${adjustment.percent}% (${adjustment.reasons.join(', ')})`;
 
   if (comparables?.estimatedValue && comparables.total > 0) {
     const count = comparables.total;
@@ -422,8 +469,6 @@ function sourceQualityAndValue({ valuation, districtPrice, comparables, subject 
     const iqrRatio = comparables.iqrRatio == null ? 0.30 : comparables.iqrRatio;
     const dispersionQ = clamp(1 - iqrRatio / 0.45, 0.05, 1);
 
-    // Les ventes réelles partent avec un avantage méthodologique, mais leur qualité
-    // varie selon le nombre, la proximité, la récence, la similarité et la dispersion.
     const dataQuality = 100 * (
       0.30 * countQ +
       0.22 * similarityQ +
@@ -431,14 +476,20 @@ function sourceQualityAndValue({ valuation, districtPrice, comparables, subject 
       0.15 * recencyQ +
       0.15 * dispersionQ
     );
+
+    // Quand la dispersion DVF est forte, les ventes deviennent moins aptes à
+    // fixer seules le prix : on réduit leur fiabilité de départ plutôt que de
+    // laisser une série de ventes atypiques tirer toute l'estimation vers le bas.
+    const dvfReliability = iqrRatio >= 0.40 ? 0.72 : iqrRatio >= 0.30 ? 0.82 : 1.00;
     out.push({
       key: "dvf",
       name: "Ventes DVF comparables",
-      value: comparables.estimatedValue,
-      ppsm: comparables.effectivePpsm || comparables.weightedPpsm || comparables.medianPpsm,
+      value: comparables.estimatedValue * adjustment.factor,
+      rawValue: comparables.estimatedValue,
+      ppsm: (comparables.effectivePpsm || comparables.weightedPpsm || comparables.medianPpsm) * adjustment.factor,
       quality: Math.round(dataQuality),
-      reason: `${count} ventes, similarité ${Math.round(comparables.avgScore || 0)}/100, distance moyenne ${comparables.avgDistanceKm == null ? "—" : comparables.avgDistanceKm.toFixed(2) + " km"}`,
-      baseReliability: 1.15
+      reason: `${count} ventes, similarité ${Math.round(comparables.avgScore || 0)}/100, distance moyenne ${comparables.avgDistanceKm == null ? "—" : comparables.avgDistanceKm.toFixed(2) + " km"} · ${adjustmentLabel}`,
+      baseReliability: 1.15 * dvfReliability
     });
   }
 
@@ -456,21 +507,19 @@ function sourceQualityAndValue({ valuation, districtPrice, comparables, subject 
       ppsm: Number(valuation.mainValuation) / subject.livingArea,
       quality: Math.round(modelQuality),
       reason: `confiance API ${Number(valuation.confidence) || 1}/5, intervalle ${valuation.lowerValuation && valuation.upperValuation ? Math.round(intervalRatio * 100) + "%" : "non communiqué"}`,
-      baseReliability: 0.85
+      baseReliability: 1.00
     });
   }
 
   if (districtPrice?.value && subject?.livingArea > 0) {
-    // Une valeur de quartier est utile comme ancrage spatial, mais elle est moins
-    // spécifique au bien qu'une vente comparable ou un modèle individualisé.
     out.push({
       key: "district",
       name: "Prix du grand quartier",
-      value: Number(districtPrice.value) * subject.livingArea,
-      ppsm: Number(districtPrice.value),
+      value: Number(districtPrice.value) * subject.livingArea * adjustment.factor,
+      ppsm: Number(districtPrice.value) * adjustment.factor,
       quality: 55,
-      reason: "indicateur de marché agrégé du grand quartier",
-      baseReliability: 0.60
+      reason: `indicateur de marché agrégé du grand quartier · ${adjustmentLabel}`,
+      baseReliability: 0.65
     });
   }
 
@@ -479,99 +528,73 @@ function sourceQualityAndValue({ valuation, districtPrice, comparables, subject 
 
 function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject, confidenceDetails }) {
   const sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
-
-  // Étape 1 : consensus robuste. Il sert uniquement à mesurer l'accord entre
-  // sources, pas à fixer directement le prix final.
   const consensus = weightedMedian(sources, x => x.ppsm, x => Math.max(1, x.quality * x.baseReliability));
 
   const scored = sources.map(source => {
-    const deviation = consensus && source.ppsm > 0
-      ? Math.abs(source.ppsm - consensus) / consensus
-      : 0;
-    // L'accord augmente/diminue le poids sans pouvoir annuler une source.
-    const agreementFactor = clamp(Math.exp(-deviation / 0.22), 0.55, 1.05);
+    const deviation = consensus && source.ppsm > 0 ? Math.abs(source.ppsm - consensus) / consensus : 0;
+    // Pénalité plus douce : un écart de source augmente l'incertitude, mais ne
+    // doit pas automatiquement écraser le modèle ou le prix de secteur.
+    const agreementFactor = clamp(Math.exp(-deviation / 0.30), 0.75, 1.05);
     const rawWeight = Math.max(0.01, (source.quality / 100) * source.baseReliability * agreementFactor);
     return { ...source, deviation, agreementFactor, rawWeight };
   });
 
-  // Les éventuelles sources optionnelles restent compatibles avec l'architecture,
-  // mais elles ne sont pas activées en mode économie API.
   const listPpsm = listingMedianPpsm(listings);
   if (listPpsm) {
     const deviation = consensus ? Math.abs(listPpsm - consensus) / consensus : 0;
-    const agreementFactor = clamp(Math.exp(-deviation / 0.22), 0.50, 1.05);
+    const agreementFactor = clamp(Math.exp(-deviation / 0.30), 0.70, 1.05);
     scored.push({
-      key: "listings",
-      name: "Annonces actuellement en vente",
-      value: listPpsm * subject.livingArea,
-      ppsm: listPpsm,
-      quality: 45,
-      reason: "prix affichés, non prix de vente",
-      baseReliability: 0.45,
-      deviation,
-      agreementFactor,
-      rawWeight: Math.max(0.01, 0.45 * agreementFactor)
+      key: "listings", name: "Annonces actuellement en vente",
+      value: listPpsm * subject.livingArea, ppsm: listPpsm, quality: 45,
+      reason: "prix affichés, non prix de vente", baseReliability: 0.45,
+      deviation, agreementFactor, rawWeight: Math.max(0.01, 0.45 * agreementFactor)
     });
   }
 
   const totalWeight = scored.reduce((s, x) => s + x.rawWeight, 0);
   if (!totalWeight) throw new Error("Pas assez de données de marché pour calculer une estimation.");
 
-  // V6 : le prix final est calculé à partir des mêmes valeurs et des mêmes
-  // poids que ceux affichés à l'utilisateur. Ainsi, le résultat est toujours
-  // reconstructible et ne dépend jamais de valeurs internes non affichées.
-  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
+  // Garde-fou : lorsque la dispersion DVF est forte, aucune source DVF ne peut
+  // représenter plus de 35 % du prix final. Le poids libéré est redistribué aux
+  // autres sources déjà présentes, proportionnellement à leur poids.
+  let normalized = scored.map(s => s.rawWeight / totalWeight);
+  const dvfIndex = scored.findIndex(s => s.key === 'dvf');
+  if (dvfIndex >= 0 && normalized[dvfIndex] > 0.35) {
+    const excess = normalized[dvfIndex] - 0.35;
+    normalized[dvfIndex] = 0.35;
+    const otherTotal = normalized.reduce((sum, w, i) => i === dvfIndex ? sum : sum + w, 0);
+    if (otherTotal > 0) normalized = normalized.map((w, i) => i === dvfIndex ? w : w + excess * (w / otherTotal));
+  }
+
+  const normalizedWeights = normalized.map(w => Math.round(w * 100));
   let weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
   if (normalizedWeights.length) {
     let maxIndex = 0;
-    for (let i = 1; i < scored.length; i++) {
-      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
-    }
+    for (let i = 1; i < scored.length; i++) if (normalized[i] > normalized[maxIndex]) maxIndex = i;
     normalizedWeights[maxIndex] += weightDelta;
   }
 
   const displayedValues = scored.map(s => round100(s.value));
-  const weightedDisplayedValue = displayedValues.reduce((sum, value, i) =>
-    sum + value * (normalizedWeights[i] / 100), 0
-  );
+  const weightedDisplayedValue = displayedValues.reduce((sum, value, i) => sum + value * (normalizedWeights[i] / 100), 0);
   const main = round1000(weightedDisplayedValue);
 
   const spreadBase = confidenceDetails?.spread ?? 0.12;
   const apiSpread = valuation?.lowerValuation && valuation?.upperValuation && valuation.mainValuation
     ? Math.max((valuation.upperValuation - valuation.lowerValuation) / (2 * valuation.mainValuation), 0)
     : spreadBase;
-  // La fourchette tient compte à la fois de la dispersion DVF et de l'incertitude
-  // de l'API, sans utiliser le prix souhaité du propriétaire.
   const spread = Math.min(0.22, Math.max(spreadBase, apiSpread));
 
   const contributions = scored.map((s, i) => ({
-    key: s.key,
-    name: s.name,
-    value: displayedValues[i],
-    weight: normalizedWeights[i],
+    key: s.key, name: s.name, value: displayedValues[i], weight: normalizedWeights[i],
     contribution: round100(displayedValues[i] * (normalizedWeights[i] / 100))
   }));
 
   return {
-    main,
-    low: round1000(main * (1 - spread)),
-    high: round1000(main * (1 + spread)),
+    main, low: round1000(main * (1 - spread)), high: round1000(main * (1 + spread)),
     consensusPpsm: consensus,
-    signals: scored.map((s, i) => ({
-      ...s,
-      value: round100(s.value),
-      weight: normalizedWeights[i],
-      quality: s.quality,
-      agreement: Math.round(s.agreementFactor * 100),
-      deviationPct: Math.round(s.deviation * 100),
-      contribution: contributions[i].contribution
-    })),
-    displayedCalculation: {
-      inputs: contributions,
-      totalWeight: normalizedWeights.reduce((sum, w) => sum + w, 0),
-      weightedTotal: round100(weightedDisplayedValue),
-      final: main
-    },
+    signals: scored.map((s, i) => ({ ...s, value: round100(s.value), weight: normalizedWeights[i], quality: s.quality,
+      agreement: Math.round(s.agreementFactor * 100), deviationPct: Math.round(s.deviation * 100), contribution: contributions[i].contribution })),
+    displayedCalculation: { inputs: contributions, totalWeight: normalizedWeights.reduce((sum, w) => sum + w, 0), weightedTotal: round100(weightedDisplayedValue), final: main },
     spread
   };
 }
@@ -629,7 +652,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "6.0.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "6.3.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -648,7 +671,7 @@ app.post("/api/analyze", async (req, res) => {
     const b = req.body || {};
     const subject = {
       address: String(b.address || "").trim(),
-      realtyType: VALID_REALTY_TYPES.has(String(b.realtyType || "")) ? String(b.realtyType) : "house",
+      realtyType: b.realtyType === "apartment" ? "apartment" : "house",
       livingArea: cleanNumber(b.livingArea),
       landArea: cleanNumber(b.landArea),
       rooms: cleanNumber(b.rooms),
@@ -661,8 +684,7 @@ app.post("/api/analyze", async (req, res) => {
       cellar: Boolean(b.cellar),
       terrace: Boolean(b.terrace),
       patio: Boolean(b.patio),
-      niceView: Boolean(b.niceView),
-      propertyFeatures: (b.propertyFeatures && typeof b.propertyFeatures === "object") ? b.propertyFeatures : {}
+      niceView: Boolean(b.niceView)
     };
 
     if (!subject.address) return res.status(400).json({ error: "L'adresse du bien est obligatoire." });
@@ -678,30 +700,38 @@ app.post("/api/analyze", async (req, res) => {
     // nbRooms et livingArea obligatoires. Nous n'envoyons plus aucun champ
     // facultatif à l'aveugle : cela évite qu'un seul paramètre optionnel invalide
     // fasse tomber toute l'estimation avec un HTTP 400.
-    const valuationSupported = VALUATION_REALTY_TYPES.has(subject.realtyType);
     const valuationRooms = Math.min(15, Math.max(1, Math.round(subject.rooms || 1)));
     const valuationArea = Math.min(10000, Math.max(1, Number(subject.livingArea)));
+    const valuationRealtyType = subject.realtyType === "apartment" ? "apartment" : "house";
     const valuationParams = {
       longitude: Number(subject.longitude),
       latitude: Number(subject.latitude),
-      realtyType: subject.realtyType,
+      realtyType: valuationRealtyType,
       nbRooms: valuationRooms,
       livingArea: valuationArea
     };
 
-    const valuationPromise = !valuationSupported
-      ? Promise.resolve({ value: null, error: null, params: null })
-      : immo("/v1/valuation", valuationParams)
-        .then(value => ({ value, error: null, params: valuationParams }))
-        .catch(error => ({
-          value: null,
-          params: valuationParams,
-          error: {
-            status: error.status || null,
-            message: error.message || "Erreur valuation",
-            apiBody: error.apiBody || null
-          }
-        }));
+    const valuationValidation = [
+      ["longitude", Number.isFinite(valuationParams.longitude)],
+      ["latitude", Number.isFinite(valuationParams.latitude)],
+      ["realtyType", valuationParams.realtyType === "house" || valuationParams.realtyType === "apartment"],
+      ["nbRooms", Number.isInteger(valuationParams.nbRooms) && valuationParams.nbRooms >= 1 && valuationParams.nbRooms <= 15],
+      ["livingArea", Number.isFinite(valuationParams.livingArea) && valuationParams.livingArea >= 1 && valuationParams.livingArea <= 10000]
+    ];
+    const invalidValuationParam = valuationValidation.find(([, ok]) => !ok);
+    if (invalidValuationParam) throw new Error(`Paramètre /valuation invalide avant envoi : ${invalidValuationParam[0]}`);
+
+    const valuationPromise = immo("/v1/valuation", valuationParams)
+      .then(value => ({ value, error: null, params: valuationParams }))
+      .catch(error => ({
+        value: null,
+        params: valuationParams,
+        error: {
+          status: error.status || null,
+          message: error.message || "Erreur valuation",
+          apiBody: error.apiBody || null
+        }
+      }));
 
     // V5.4.4 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
@@ -722,7 +752,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "6.0.0",
+      version: "6.3.0",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -797,7 +827,7 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur Web sur le port ${PORT}`);
+  console.log(`JML Estimateur V6.3.0 sur http://localhost:${PORT}`);
   console.log(MOCK_API_MODE
     ? "MODE TEST GRATUIT : aucune requête Immo Data réelle ne sera envoyée."
     : "MODE API RÉELLE : les appels Immo Data peuvent consommer des crédits.");
