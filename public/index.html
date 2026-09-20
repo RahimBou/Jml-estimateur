@@ -22,7 +22,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3 — scoring des comparables, pondération intelligente et détection des atypiques</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.4 — médiane pondérée, robustesse statistique et comparables intelligents</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -104,12 +104,12 @@ function render(d){
   $('txCount').textContent=String(d.sources.comparables.retainedTotal||d.sources.comparables.total||0);
   $('txCount').title=String(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' transactions trouvées';
   $('window').textContent=d.method.comparableWindow; $('duration').textContent=d.sources.saleDuration ? d.sources.saleDuration+' j' : '—';
-  $('selection').innerHTML=escapeHtml(d.method.comparableSelection)+' · '+(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' trouvées · '+(d.sources.comparables.retainedTotal||d.sources.comparables.total||0)+' retenues · rayon '+d.sources.comparables.radiusMeters+' m · score moyen <b>'+Number(d.method.averageComparableScore||0)+'/100</b>'+(d.method.atypicalComparables?' · '+d.method.atypicalComparables+' atypique(s)':'');
+  $('selection').innerHTML=escapeHtml(d.method.comparableSelection)+' · '+(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' trouvées · '+(d.sources.comparables.retainedTotal||d.sources.comparables.total||0)+' affichées · '+(d.sources.comparables.calculationTotal||0)+' utilisées · rayon '+d.sources.comparables.radiusMeters+' m · score moyen <b>'+Number(d.method.averageComparableScore||0)+'/100</b>'+(d.method.atypicalComparables?' · '+d.method.atypicalComparables+' atypique(s)':'');
   $('method').textContent=d.method.note;
   const sourceRows=d.signals||[];
   $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids dans le calcul : ${s.weight}%</div></div>`).join('');
   const tx=d.sources.comparables.data||[];
-  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td><span class="score">${Math.round(x.score||0)}/100</span>${x.atypical?' <span class="tag warn">Atypique</span>':''}</td><td><span class="tag">${Number(x.influencePercent||0).toFixed(1)}%</span></td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
+  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td><span class="score">${Math.round(x.score||0)}/100</span>${x.atypical?' <span class="tag warn">Atypique</span>':''}</td><td><span class="tag">${x.usedInCalculation?Number(x.influencePercent||0).toFixed(1)+'%':'non utilisé'}</span></td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
   $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
 }
 
