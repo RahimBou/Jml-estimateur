@@ -15,6 +15,8 @@ const MOCK_API_MODE = /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE ||
 const COMPARABLE_MIN_PPSM = Math.max(0, cleanNumber(process.env.COMPARABLE_MIN_PPSM, 400));
 const COMPARABLE_ROBUST_MULT = Math.max(0.5, cleanNumber(process.env.COMPARABLE_ROBUST_MULT, 1.5));
 const IMMO_BASE = "https://api.immo-data.fr";
+const VALID_REALTY_TYPES = new Set(["house","apartment","building","garage","parking","land","agricultural_land","commercial","industrial","other"]);
+const VALUATION_REALTY_TYPES = new Set(["house","apartment"]);
 
 app.use(express.json({ limit: "100kb" }));
 app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false, maxAge: 0 }));
@@ -627,7 +629,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "6.1.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "6.0.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -646,7 +648,7 @@ app.post("/api/analyze", async (req, res) => {
     const b = req.body || {};
     const subject = {
       address: String(b.address || "").trim(),
-      realtyType: ["house","apartment","building","garage","parking","land","agricultural_land","commercial","industrial","other"].includes(String(b.realtyType)) ? String(b.realtyType) : "house",
+      realtyType: VALID_REALTY_TYPES.has(String(b.realtyType || "")) ? String(b.realtyType) : "house",
       livingArea: cleanNumber(b.livingArea),
       landArea: cleanNumber(b.landArea),
       rooms: cleanNumber(b.rooms),
@@ -654,13 +656,13 @@ app.post("/api/analyze", async (req, res) => {
       constructionYear: cleanNumber(b.constructionYear),
       dpe: String(b.dpe || ""),
       condition: String(b.condition || ""),
-      propertyFeatures: (b.propertyFeatures && typeof b.propertyFeatures === "object") ? b.propertyFeatures : {},
       parking: Boolean(b.parking),
       garage: Boolean(b.garage),
       cellar: Boolean(b.cellar),
       terrace: Boolean(b.terrace),
       patio: Boolean(b.patio),
-      niceView: Boolean(b.niceView)
+      niceView: Boolean(b.niceView),
+      propertyFeatures: (b.propertyFeatures && typeof b.propertyFeatures === "object") ? b.propertyFeatures : {}
     };
 
     if (!subject.address) return res.status(400).json({ error: "L'adresse du bien est obligatoire." });
@@ -676,48 +678,40 @@ app.post("/api/analyze", async (req, res) => {
     // nbRooms et livingArea obligatoires. Nous n'envoyons plus aucun champ
     // facultatif à l'aveugle : cela évite qu'un seul paramètre optionnel invalide
     // fasse tomber toute l'estimation avec un HTTP 400.
+    const valuationSupported = VALUATION_REALTY_TYPES.has(subject.realtyType);
     const valuationRooms = Math.min(15, Math.max(1, Math.round(subject.rooms || 1)));
     const valuationArea = Math.min(10000, Math.max(1, Number(subject.livingArea)));
-    const valuationRealtyType = subject.realtyType === "apartment" ? "apartment" : "house";
     const valuationParams = {
       longitude: Number(subject.longitude),
       latitude: Number(subject.latitude),
-      realtyType: valuationRealtyType,
+      realtyType: subject.realtyType,
       nbRooms: valuationRooms,
       livingArea: valuationArea
     };
 
-    const valuationValidation = [
-      ["longitude", Number.isFinite(valuationParams.longitude)],
-      ["latitude", Number.isFinite(valuationParams.latitude)],
-      ["realtyType", valuationParams.realtyType === "house" || valuationParams.realtyType === "apartment"],
-      ["nbRooms", Number.isInteger(valuationParams.nbRooms) && valuationParams.nbRooms >= 1 && valuationParams.nbRooms <= 15],
-      ["livingArea", Number.isFinite(valuationParams.livingArea) && valuationParams.livingArea >= 1 && valuationParams.livingArea <= 10000]
-    ];
-    const invalidValuationParam = valuationValidation.find(([, ok]) => !ok);
-    if (invalidValuationParam) throw new Error(`Paramètre /valuation invalide avant envoi : ${invalidValuationParam[0]}`);
-
-    const valuationPromise = immo("/v1/valuation", valuationParams)
-      .then(value => ({ value, error: null, params: valuationParams }))
-      .catch(error => ({
-        value: null,
-        params: valuationParams,
-        error: {
-          status: error.status || null,
-          message: error.message || "Erreur valuation",
-          apiBody: error.apiBody || null
-        }
-      }));
+    const valuationPromise = !valuationSupported
+      ? Promise.resolve({ value: null, error: null, params: null })
+      : immo("/v1/valuation", valuationParams)
+        .then(value => ({ value, error: null, params: valuationParams }))
+        .catch(error => ({
+          value: null,
+          params: valuationParams,
+          error: {
+            status: error.status || null,
+            message: error.message || "Erreur valuation",
+            apiBody: error.apiBody || null
+          }
+        }));
 
     // V5.4.4 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
     // Les annonces et le prix commune sont désactivés par défaut pour éviter d'épuiser le solde.
-    const districtPromise = marketPrice(geo.districtCode, "district", valuationRealtyType, requestId);
+    const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType, requestId);
 
     const [valuationResult, districtPrice, comparables] = await Promise.all([
       valuationPromise,
       districtPromise,
-      findComparables(subject, valuationRealtyType, requestId)
+      findComparables(subject, subject.realtyType, requestId)
     ]);
 
     const valuation = valuationResult.value;
@@ -728,7 +722,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "6.1.0",
+      version: "6.0.0",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -745,8 +739,7 @@ app.post("/api/analyze", async (req, res) => {
         rooms: subject.rooms,
         bathrooms: subject.bathrooms,
         constructionYear: subject.constructionYear,
-        dpe: subject.dpe,
-        propertyFeatures: subject.propertyFeatures
+        dpe: subject.dpe
       },
       estimate: {
         main: final.main,
@@ -804,7 +797,7 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V6.1.0 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur Web sur le port ${PORT}`);
   console.log(MOCK_API_MODE
     ? "MODE TEST GRATUIT : aucune requête Immo Data réelle ne sera envoyée."
     : "MODE API RÉELLE : les appels Immo Data peuvent consommer des crédits.");
