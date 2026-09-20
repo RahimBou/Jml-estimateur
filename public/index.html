@@ -22,7 +22,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.4.2 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -57,7 +57,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 
 <div class="note">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne pourra donc pas influencer le calcul.</div>
 <button id="submit" type="submit">ANALYSER LE BIEN</button>
-<div id="loading" class="loading">⏳ Analyse en cours : géocodage, marché local, annonces et ventes DVF comparables…</div>
+<div id="loading" class="loading">⏳ Analyse en cours : géocodage, estimation, quartier et ventes DVF comparables…</div>
 <div id="error"></div>
 </form>
 
@@ -67,7 +67,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">💡 V5.4 : une recherche transactionnelle large, puis sélection locale des comparables. Les réponses répétées sont mises en cache temporairement.</p></div>
 
-<div class="card"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
+<div class="card" id="reliabilityCard"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
 
 <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><p id="apiWarning" class="hint" style="display:none"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
@@ -108,7 +108,7 @@ function render(d){
   $('ppsm').textContent=euro(d.estimate.pricePerSqm);
   $('txCount').textContent=String(d.sources.comparables.total||0);
   $('window').textContent=d.method.comparableWindow;
-  $('selection').textContent=(d.method.foundTransactions||0)+' transaction(s) trouvée(s) · '+(d.method.analyzedTransactions||0)+' après filtrage · '+(d.method.retainedComparables||0)+' retenue(s) · '+d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m'; if(d.method.apiWarning){ $('apiWarning').style.display='block'; $('apiWarning').textContent='⚠️ '+d.method.apiWarning+' L'estimation continue avec les autres sources disponibles.'; } else { $('apiWarning').style.display='none'; }
+  $('selection').textContent=(d.method.foundTransactions||0)+' transaction(s) trouvée(s) · '+(d.method.analyzedTransactions||0)+' après filtrage · '+(d.method.retainedComparables||0)+' retenue(s) · '+d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m'; if(d.method.apiWarning){ $('apiWarning').style.display='block'; $('apiWarning').textContent='⚠️ '+d.method.apiWarning+' L’estimation continue avec les autres sources disponibles.'; } else { $('apiWarning').style.display='none'; }
   $('method').textContent=d.method.note;
   if(d.api){ $('method').textContent += ' · Plafond : '+d.api.maxCallsPerAnalysis+' appels/analyse.'; }
   const sourceRows=d.signals||[];
@@ -125,6 +125,13 @@ $('compareBtn').onclick=()=>{
   $('comparison').innerHTML='<b>Estimation JML :</b> '+euro(estimateValue)+'<br><b>Prix envisagé :</b> '+euro(owner)+'<br><b>Écart :</b> '+(diff>=0?'+':'')+euro(diff)+' ('+(pct>=0?'+':'')+pct.toFixed(1)+' %)';
 };
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+
+// Nettoyage défensif : évite l'affichage de anciens blocs/échappements issus d'un cache.
+(function(){
+  document.querySelectorAll('body *').forEach(el=>{
+    if(el.childNodes.length===1 && el.firstChild.nodeType===3 && /^(\s*\\n)+\s*$/.test(el.textContent)) el.remove();
+  });
+})();
 </script>
 </body>
 </html>
