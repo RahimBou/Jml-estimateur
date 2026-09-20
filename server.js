@@ -306,22 +306,32 @@ async function findComparables(subject, realtyType) {
   const scored = selected.map(x => ({
     ...x,
     score: comparableScore(x, subject),
-    ageMonths: ageMonthsFromDate(x.date)
+    ageMonths: ageMonthsFromDate(x.date),
+    rawWeight: similarityWeight(x, subject)
   }));
-  const weights = scored.map(x => similarityWeight(x, subject));
-  const weightTotal = weights.reduce((sum, x) => sum + (Number.isFinite(x) ? x : 0), 0);
-  const ranked = scored.map((x, i) => ({
+
+  // On analyse toutes les transactions trouvées, puis on ne retient que les
+  // meilleurs comparables. Cela évite qu'une longue liste de biens moyens
+  // dilue les ventes réellement pertinentes.
+  const rankedCandidates = scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.rawWeight - a.rawWeight;
+  });
+  const retained = rankedCandidates.slice(0, 15);
+  const retainedWeightTotal = retained.reduce((sum, x) => sum + x.rawWeight, 0);
+  const ranked = retained.map(x => ({
     ...x,
-    influence: weightTotal > 0 ? (weights[i] / weightTotal) * 100 : 0
-  })).sort((a, b) => b.influence - a.influence);
+    influence: retainedWeightTotal > 0 ? Number(((x.rawWeight / retainedWeightTotal) * 100).toFixed(1)) : 0
+  }));
 
   const ppsmValues = ranked.map(x => x.sqmPrice);
   const medianPpsm = median(ppsmValues);
-  const weightedPpsm = weightedMean(ranked, "sqmPrice", x => similarityWeight(x, subject));
+  const weightedPpsm = weightedMean(ranked, "sqmPrice", x => x.rawWeight);
   const effectivePpsm = weightedPpsm || medianPpsm;
   const estimatedValue = effectivePpsm ? effectivePpsm * subject.livingArea : null;
 
   return {
+    foundCount: selected.length,
     total: ranked.length,
     stage: usedStage.label,
     radiusMeters: usedStage.radius,
@@ -332,7 +342,7 @@ async function findComparables(subject, realtyType) {
     avgScore: ranked.length ? ranked.reduce((s, x) => s + x.score, 0) / ranked.length : null,
     avgDistanceKm: ranked.length ? ranked.reduce((s, x) => s + (Number.isFinite(x.distanceKm) ? x.distanceKm : 3), 0) / ranked.length : null,
     avgAgeMonths: ranked.length ? ranked.reduce((s, x) => s + (x.ageMonths == null ? usedStage.months : x.ageMonths), 0) / ranked.length : null,
-    data: ranked.slice(0, 15)
+    data: ranked
   };
 }
 
@@ -431,7 +441,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.3.0", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.3.1", apiKeyConfigured: Boolean(API_KEY) });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -506,7 +516,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.3.0",
+      version: "5.3.1",
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -566,5 +576,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.3 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.3.1 sur http://localhost:${PORT}`);
 });
