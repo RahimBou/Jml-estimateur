@@ -22,20 +22,31 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.1 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.4 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
 <h2>📍 Le bien</h2>
 <div class="grid">
 <div class="full"><label>Adresse complète</label><input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières"></div>
-<div><label>Type de bien</label><select id="realtyType"><option value="house">Maison</option><option value="apartment">Appartement</option></select></div>
-<div><label>Surface habitable (m²)</label><input id="livingArea" type="number" min="10" step="1" required placeholder="120"></div>
+<div><label>Type de bien</label><select id="realtyType">
+<option value="house">Maison</option>
+<option value="apartment">Appartement</option>
+<option value="land">Terrain</option>
+<option value="commercial">Local commercial / professionnel</option>
+<option value="annex">Dépendance — garage / box / parking</option>
+<option value="multiple">Ensemble immobilier — immeuble / mixte</option>
+</select></div>
+<div><label id="areaLabel">Surface habitable (m²)</label><input id="livingArea" type="number" min="1" step="1" required placeholder="120"></div>
 <div><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
-<div><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
-<div><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
-<div><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
-<div><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+<div id="roomsWrap"><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
+<div id="bathWrap"><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
+<div id="yearWrap"><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
+<div id="dpeWrap"><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+<div id="gesWrap"><label>GES</label><select id="ges"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+<div id="bedroomsWrap"><label>Chambres</label><input id="bedrooms" type="number" min="0" max="30" step="1" placeholder="3"></div>
+<div id="levelWrap"><label>Nombre d'étages de l'immeuble</label><input id="level" type="number" min="0" max="30" step="1" placeholder="5"></div>
+<div id="floorWrap"><label>Étage du bien</label><input id="floor" type="number" min="0" max="30" step="1" placeholder="2"></div>
 </div>
 </div>
 
@@ -43,7 +54,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 <h2>🏠 Caractéristiques</h2>
 <div class="grid">
 <div><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
-<div class="hint">Les caractéristiques servent à comparer le bien aux ventes réelles. Elles ne remplacent pas les données DVF.</div>
+<div class="hint">Les caractéristiques peuvent influencer le prix : surface, DPE/GES, état, année, terrain, étage, ascenseur, stationnement, garage, cave, terrasse, vue, piscine. En mode gratuit, l'ajustement est indicatif et plafonné ; il ne prétend pas reproduire un modèle statistique réel.</div>
 <div class="full"><label>Équipements</label><div class="checks">
 <label class="check"><input id="garage" type="checkbox"> Garage</label>
 <label class="check"><input id="parking" type="checkbox"> Parking</label>
@@ -51,6 +62,8 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 <label class="check"><input id="terrace" type="checkbox"> Terrasse</label>
 <label class="check"><input id="patio" type="checkbox"> Cour / patio</label>
 <label class="check"><input id="niceView" type="checkbox"> Belle vue</label>
+<label class="check"><input id="elevator" type="checkbox"> Ascenseur</label>
+<label class="check"><input id="pool" type="checkbox"> Piscine</label>
 </div></div>
 </div>
 </div>
@@ -65,7 +78,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 <div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
 <div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
-<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">🆓 MODE GRATUIT : aucune requête Immo Data n’est effectuée et aucun crédit n’est consommé. Les données sont simulées localement pour tester le moteur. · 💡 V5.5.1 : chaque source reçoit un score de qualité indépendant ; son poids est ensuite ajusté selon son accord avec le consensus robuste. Ce n’est pas une moyenne fixe.</p></div>
+<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">🆓 MODE GRATUIT : aucune requête Immo Data n’est effectuée et aucun crédit n’est consommé. Les données sont simulées localement pour tester le moteur. · 💡 V5.5.4 : types alignés sur les catégories officielles Immo Data (Maison, Appartement, Terrain, Commercial, Dépendance, Ensemble immobilier) ; chaque source reçoit un score de qualité indépendant ; son poids est ensuite ajusté selon son accord avec le consensus robuste. Ce n’est pas une moyenne fixe.</p></div>
 
 <div class="card" id="reliabilityCard"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
 
@@ -79,15 +92,33 @@ const euro = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'
 let estimateValue = 0;
 const $ = id => document.getElementById(id);
 
+const typeMeta = {
+  house:{label:'Surface habitable (m²)', placeholder:'120', showRooms:true, showBath:true, showYear:true, showDpe:true, showGes:true, showBedrooms:true, showLevel:false, showFloor:false, landLabel:'Surface du terrain (m²)'},
+  apartment:{label:'Surface habitable (m²)', placeholder:'70', showRooms:true, showBath:true, showYear:true, showDpe:true, showGes:true, showBedrooms:true, showLevel:true, showFloor:true, landLabel:'Surface du terrain (m²)'},
+  land:{label:'Surface du terrain (m²)', placeholder:'500', showRooms:false, showBath:false, showYear:false, showDpe:false, showGes:false, showBedrooms:false, showLevel:false, showFloor:false, landLabel:'Surface cadastrale (m²)'},
+  commercial:{label:'Surface du local (m²)', placeholder:'100', showRooms:false, showBath:false, showYear:true, showDpe:false, showGes:false, showBedrooms:false, showLevel:true, showFloor:true, landLabel:'Surface de terrain (m²)'},
+  annex:{label:'Surface de la dépendance (m²)', placeholder:'20', showRooms:false, showBath:false, showYear:false, showDpe:false, showGes:false, showBedrooms:false, showLevel:false, showFloor:false, landLabel:'Surface de parcelle (m²)'},
+  multiple:{label:"Surface totale de l'ensemble immobilier (m²)", placeholder:'300', showRooms:true, showBath:true, showYear:true, showDpe:true, showGes:true, showBedrooms:true, showLevel:true, showFloor:true, landLabel:'Surface du terrain (m²)'}
+};
+function updatePropertyForm(){
+  const m=typeMeta[$('realtyType').value]||typeMeta.house;
+  $('areaLabel').textContent=m.label; $('livingArea').placeholder=m.placeholder;
+  const landLabel=$('landArea').previousElementSibling; if(landLabel) landLabel.textContent=m.landLabel;
+  $('roomsWrap').style.display=m.showRooms?'block':'none'; $('bathWrap').style.display=m.showBath?'block':'none'; $('yearWrap').style.display=m.showYear?'block':'none'; $('dpeWrap').style.display=m.showDpe?'block':'none'; $('gesWrap').style.display=m.showGes?'block':'none'; $('bedroomsWrap').style.display=m.showBedrooms?'block':'none'; $('levelWrap').style.display=m.showLevel?'block':'none'; $('floorWrap').style.display=m.showFloor?'block':'none';
+  if(!m.showRooms) $('rooms').value=''; if(!m.showBath) $('bathrooms').value=''; if(!m.showYear) $('constructionYear').value=''; if(!m.showDpe) $('dpe').value=''; if(!m.showGes) $('ges').value=''; if(!m.showBedrooms) $('bedrooms').value=''; if(!m.showLevel) $('level').value=''; if(!m.showFloor) $('floor').value='';
+}
+$('realtyType').addEventListener('change', updatePropertyForm); updatePropertyForm();
+
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
   $('error').innerHTML=''; $('loading').style.display='block'; $('submit').disabled=true;
   const payload={
     address:$('address').value.trim(), realtyType:$('realtyType').value,
     livingArea:Number($('livingArea').value), landArea:Number($('landArea').value||0), rooms:Number($('rooms').value||0),
-    bathrooms:Number($('bathrooms').value||0), constructionYear:Number($('constructionYear').value||0), dpe:$('dpe').value,
+    bathrooms:Number($('bathrooms').value||0), constructionYear:Number($('constructionYear').value||0), dpe:$('dpe').value, ges:$('ges').value,
+    bedrooms:Number($('bedrooms').value||0), level:Number($('level').value||0), floor:Number($('floor').value||0),
     condition:$('condition').value, garage:$('garage').checked, parking:$('parking').checked, cellar:$('cellar').checked,
-    terrace:$('terrace').checked, patio:$('patio').checked, niceView:$('niceView').checked
+    terrace:$('terrace').checked, patio:$('patio').checked, niceView:$('niceView').checked, elevator:$('elevator').checked, pool:$('pool').checked
   };
   try{
     const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -111,8 +142,10 @@ function render(d){
   $('selection').textContent=(d.method.foundTransactions||0)+' transaction(s) trouvée(s) · '+(d.method.analyzedTransactions||0)+' après filtrage · '+(d.method.retainedComparables||0)+' retenue(s) · '+d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m'; if(d.method.filterReason){ $('filterInfo').style.display='block'; $('filterInfo').textContent='🔎 '+d.method.filterReason+'.'; } else { $('filterInfo').style.display='none'; } if(d.method.apiWarning){ $('apiWarning').style.display='block'; $('apiWarning').textContent='⚠️ '+d.method.apiWarning+' L’estimation continue avec les autres sources disponibles.'; } else { $('apiWarning').style.display='none'; }
   $('method').textContent=d.method.note;
   if(d.api){ $('method').textContent += d.api.freeMode ? ' · 🆓 0 appel API payant.' : ' · Plafond : '+d.api.maxCallsPerAnalysis+' appels/analyse.'; }
+  const adj=Number(d.method.featureAdjustmentPct||0);
+  $('method').textContent += ' · Ajustement caractéristiques en mode gratuit : '+(adj>=0?'+':'')+adj+' % (indicatif).';
   const sourceRows=d.signals||[];
-  $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids réel : <b>${s.weight}%</b> · Qualité : <b>${s.quality ?? '—'}/100</b> · Accord : <b>${s.agreement ?? '—'}%</b></div><div class="hint">${escapeHtml(s.reason||'')} · écart au consensus : ${s.deviationPct ?? 0}%</div></div>`).join('');
+  $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids réel : <b>${s.weight}%</b> · Qualité : <b>${s.quality ?? '—'}/100</b> · Accord : <b>${s.agreement ?? '—'}%</b></div><div class="hint">${escapeHtml(s.reason||'')} · écart au consensus : ${s.deviationPct ?? 0}% · ajustement caractéristiques : ${(Number(s.featureAdjustmentPct||0)>=0?'+':'')+Number(s.featureAdjustmentPct||0)}%</div></div>`).join('');
   const tx=d.sources.comparables.data||[];
   $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td>${Number.isFinite(x.score)?x.score+'/100':'—'}</td><td>${Number.isFinite(x.influence)?x.influence.toFixed(1)+' %':'—'}</td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue. La fiabilité liée aux ventes est donc réduite ; les autres sources restent affichées séparément.</td></tr>';
   $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
