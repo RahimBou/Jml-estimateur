@@ -1,335 +1,124 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JML Immobilier — Estimateur V4.1</title>
-  <style>
-    :root { --navy:#1f2a44; --gold:#c7a45a; --bg:#f5f6f8; --card:#fff; --text:#202733; --muted:#687386; --danger:#b42318; --ok:#18794e; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text); }
-    header { background:var(--navy); color:white; padding:24px 18px; text-align:center; }
-    header h1 { margin:0 0 5px; font-size:25px; }
-    header p { margin:0; opacity:.85; }
-    main { max-width:1050px; margin:22px auto; padding:0 14px 40px; }
-    .card { background:var(--card); border-radius:14px; padding:20px; margin-bottom:18px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
-    h2 { margin:0 0 18px; color:var(--navy); font-size:20px; }
-    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-    .full { grid-column:1/-1; }
-    label { display:block; font-weight:700; margin-bottom:6px; font-size:14px; }
-    input,select,textarea { width:100%; border:1px solid #d5dbe5; border-radius:9px; padding:11px 12px; font-size:15px; background:white; }
-    textarea { min-height:80px; resize:vertical; }
-    .checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .check { display:flex; align-items:center; gap:8px; font-weight:600; }
-    .check input { width:auto; }
-    button { border:0; border-radius:10px; padding:13px 18px; font-weight:700; font-size:16px; cursor:pointer; }
-    .primary { background:var(--navy); color:white; width:100%; }
-    .secondary { background:#e9edf3; color:var(--navy); }
-    button:disabled { opacity:.55; cursor:wait; }
-    .notice { padding:12px 14px; border-radius:9px; margin-bottom:14px; display:none; }
-    .error { background:#fdecec; color:var(--danger); }
-    .success { background:#eaf8f1; color:var(--ok); }
-    .estimate { text-align:center; padding:22px; border:2px solid var(--gold); border-radius:13px; }
-    .estimate .value { font-size:38px; font-weight:800; color:var(--navy); margin:7px 0; }
-    .range { font-size:17px; }
-    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px; }
-    .stat { background:#f3f5f8; padding:14px; border-radius:10px; text-align:center; }
-    .stat strong { display:block; font-size:20px; margin-top:4px; }
-    table { width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
-    th,td { padding:9px; border-bottom:1px solid #e4e7ec; text-align:left; }
-    .hidden { display:none !important; }
-    .small { color:var(--muted); font-size:13px; line-height:1.45; }
-    .seller-box { border:2px solid var(--navy); }
-    .compare { margin-top:12px; padding:14px; border-radius:10px; background:#f3f5f8; }
-    @media (max-width:700px) { .grid,.stats,.checks { grid-template-columns:1fr; } .full { grid-column:auto; } .estimate .value { font-size:30px; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JML Immobilier — Estimateur V5</title>
+<style>
+:root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--brand);color:#fff;padding:20px 16px}header .wrap{max-width:980px;margin:auto;display:flex;align-items:center;gap:14px}.logo{width:52px;height:52px;border:2px solid #fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900}.title{font-size:20px;font-weight:900}.sub{font-size:13px;opacity:.85;margin-top:4px}
+main{max-width:980px;margin:22px auto;padding:0 14px}.card{background:var(--paper);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 18px #0000000a;border:1px solid #e8edf2}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
+h2{font-size:18px;margin:0 0 16px}.hint{color:var(--muted);font-size:13px;line-height:1.45}.note{background:var(--soft);border-left:4px solid var(--brand);padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}.lock{background:var(--warn);border-left:4px solid #c28a00;padding:12px 14px;border-radius:8px;font-size:13px;margin-top:16px}
+label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff}input:focus,select:focus,textarea:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
+.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.check{border:1px solid var(--line);padding:10px;border-radius:9px;display:flex;gap:8px;align-items:center;font-size:13px}.check input{width:auto}
+button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}button:disabled{opacity:.55;cursor:wait}
+.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
+.result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
+.sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
+.tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
+.compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
+</style>
 </head>
 <body>
-<header>
-  <h1>JML Immobilier</h1>
-  <p>Estimateur immobilier professionnel</p>
-</header>
-
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5 — analyse multi-sources et ventes comparables</div></div></div></header>
 <main>
-  <div id="error" class="notice error"></div>
-  <div id="success" class="notice success"></div>
+<form id="form">
+<div class="card">
+<h2>📍 Le bien</h2>
+<div class="grid">
+<div class="full"><label>Adresse complète</label><input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières"></div>
+<div><label>Type de bien</label><select id="realtyType"><option value="house">Maison</option><option value="apartment">Appartement</option></select></div>
+<div><label>Surface habitable (m²)</label><input id="livingArea" type="number" min="10" step="1" required placeholder="120"></div>
+<div><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
+<div><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
+<div><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
+<div><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
+<div><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+</div>
+</div>
 
-  <section class="card">
-    <h2>🏠 Informations du bien</h2>
-    <div class="grid">
-      <div class="full">
-        <label for="address">Adresse du bien *</label>
-        <input id="address" placeholder="Ex. 6 rue ... 08000 Charleville-Mézières">
-      </div>
+<div class="card">
+<h2>🏠 Caractéristiques</h2>
+<div class="grid">
+<div><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
+<div class="hint">Les caractéristiques servent à comparer le bien aux ventes réelles. Elles ne remplacent pas les données DVF.</div>
+<div class="full"><label>Équipements</label><div class="checks">
+<label class="check"><input id="garage" type="checkbox"> Garage</label>
+<label class="check"><input id="parking" type="checkbox"> Parking</label>
+<label class="check"><input id="cellar" type="checkbox"> Cave</label>
+<label class="check"><input id="terrace" type="checkbox"> Terrasse</label>
+<label class="check"><input id="patio" type="checkbox"> Cour / patio</label>
+<label class="check"><input id="niceView" type="checkbox"> Belle vue</label>
+</div></div>
+</div>
+</div>
 
-      <div>
-        <label for="realtyType">Type de bien *</label>
-        <select id="realtyType">
-          <option value="house">Maison</option>
-          <option value="apartment">Appartement</option>
-        </select>
-      </div>
+<div class="note">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne pourra donc pas influencer le calcul.</div>
+<button id="submit" type="submit">ANALYSER LE BIEN</button>
+<div id="loading" class="loading">⏳ Analyse en cours : géocodage, marché local, annonces et ventes DVF comparables…</div>
+<div id="error"></div>
+</form>
 
-      <div>
-        <label for="livingArea">Surface habitable (m²) *</label>
-        <input id="livingArea" type="number" min="1" step="0.1">
-      </div>
+<section id="result" class="result">
+<div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
+<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
-      <div>
-        <label for="landArea">Terrain (m²)</label>
-        <input id="landArea" type="number" min="0" step="1">
-      </div>
+<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p></div>
 
-      <div>
-        <label for="nbRooms">Nombre de pièces *</label>
-        <input id="nbRooms" type="number" min="1" max="15" step="1">
-      </div>
+<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
-      <div>
-        <label for="bathrooms">Nombre de salles de bains</label>
-        <input id="bathrooms" type="number" min="0" max="5" step="1" value="0">
-      </div>
-
-      <div>
-        <label for="constructionYear">Année de construction</label>
-        <input id="constructionYear" type="number" min="0" max="2026" placeholder="Ex. 1960">
-      </div>
-
-      <div>
-        <label for="dpe">DPE</label>
-        <select id="dpe">
-          <option value="">Non renseigné</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-          <option value="D">D</option>
-          <option value="E">E</option>
-          <option value="F">F</option>
-          <option value="G">G</option>
-        </select>
-      </div>
-
-      <div>
-        <label for="condition">État du bien</label>
-        <select id="condition">
-          <option value="">Non renseigné</option>
-          <option value="excellent">Excellent / neuf</option>
-          <option value="standard">Bon état / standard</option>
-          <option value="renovate">À rénover</option>
-        </select>
-      </div>
-
-      <div>
-        <label for="heating">Chauffage</label>
-        <input id="heating" placeholder="Ex. Gaz, électrique, pompe à chaleur">
-      </div>
-
-      <div class="full">
-        <label>Équipements et caractéristiques</label>
-        <div class="checks">
-          <label class="check"><input type="checkbox" id="garage"> Garage</label>
-          <label class="check"><input type="checkbox" id="parking"> Parking</label>
-          <label class="check"><input type="checkbox" id="cellar"> Cave</label>
-          <label class="check"><input type="checkbox" id="terrace"> Terrasse / balcon</label>
-          <label class="check"><input type="checkbox" id="garden"> Jardin / cour</label>
-          <label class="check"><input type="checkbox" id="niceView"> Belle vue</label>
-          <label class="check"><input type="checkbox" id="pool"> Piscine</label>
-        </div>
-        <p class="small">Les caractéristiques non prises en charge directement par Immo Data restent enregistrées pour le dossier, mais ne modifient pas artificiellement l'estimation.</p>
-      </div>
-
-      <div class="full">
-        <label for="works">Travaux / observations</label>
-        <textarea id="works" placeholder="Travaux à prévoir, rénovation récente, environnement, nuisances, prestations..."></textarea>
-      </div>
-
-      <div class="full">
-        <button id="estimateBtn" class="primary">Lancer l’estimation indépendante</button>
-        <p class="small">Le prix que le vendeur souhaite obtenir n'est pas demandé et n'est pas transmis avant l'estimation.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="results" class="card hidden">
-    <h2>📊 Résultat de l'estimation</h2>
-
-    <div class="estimate">
-      <div>Valeur estimée</div>
-      <div id="mainValuation" class="value">—</div>
-      <div id="range" class="range">Fourchette : —</div>
-      <div id="confidence" class="small">Confiance : —</div>
-    </div>
-
-    <div class="stats">
-      <div class="stat">Prix du marché local<strong id="marketPrice">—</strong></div>
-      <div class="stat">Durée moyenne de vente<strong id="saleDuration">—</strong></div>
-      <div class="stat">Adresse retenue<strong id="matchedAddress">—</strong></div>
-    </div>
-
-    <div style="margin-top:18px">
-      <h2>🔎 Transactions comparables</h2>
-      <div id="comparables">—</div>
-    </div>
-  </section>
-
-  <section id="sellerSection" class="card seller-box hidden">
-    <h2>💬 Maintenant, le prix du vendeur</h2>
-    <p>Le calcul de marché vient d'être effectué indépendamment. Vous pouvez maintenant demander au vendeur :</p>
-    <p><strong>« Quel prix aviez-vous en tête pour votre bien ? »</strong></p>
-
-    <label for="sellerPrice">Prix souhaité par le vendeur (€)</label>
-    <input id="sellerPrice" type="number" min="0" step="1000" placeholder="Ex. 220000">
-    <button id="compareBtn" class="secondary" style="margin-top:12px">Comparer avec l’estimation</button>
-    <div id="comparison" class="compare hidden"></div>
-  </section>
+<div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
+</section>
 </main>
-
 <script>
-  const $ = (id) => document.getElementById(id);
-  let lastResult = null;
+const euro = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(n)||0);
+let estimateValue = 0;
+const $ = id => document.getElementById(id);
 
-  function showError(message) {
-    $("success").style.display = "none";
-    $("error").textContent = message;
-    $("error").style.display = "block";
-    window.scrollTo({top:0, behavior:"smooth"});
-  }
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('error').innerHTML=''; $('loading').style.display='block'; $('submit').disabled=true;
+  const payload={
+    address:$('address').value.trim(), realtyType:$('realtyType').value,
+    livingArea:Number($('livingArea').value), landArea:Number($('landArea').value||0), rooms:Number($('rooms').value||0),
+    bathrooms:Number($('bathrooms').value||0), constructionYear:Number($('constructionYear').value||0), dpe:$('dpe').value,
+    condition:$('condition').value, garage:$('garage').checked, parking:$('parking').checked, cellar:$('cellar').checked,
+    terrace:$('terrace').checked, patio:$('patio').checked, niceView:$('niceView').checked
+  };
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await r.json(); if(!r.ok) throw new Error(data.error||'Erreur pendant l’analyse');
+    render(data);
+  }catch(err){ $('error').innerHTML='<div class="error">'+escapeHtml(err.message)+'</div>'; }
+  finally{ $('loading').style.display='none'; $('submit').disabled=false; }
+});
 
-  function showSuccess(message) {
-    $("error").style.display = "none";
-    $("success").textContent = message;
-    $("success").style.display = "block";
-  }
+function render(d){
+  estimateValue=d.estimate.main;
+  $('main').textContent=euro(d.estimate.main);
+  $('range').textContent='Fourchette indicative : '+euro(d.estimate.low)+' → '+euro(d.estimate.high);
+  $('confidence').textContent='Fiabilité : '+d.estimate.confidence+'/5';
+  $('ppsm').textContent=euro(d.estimate.pricePerSqm);
+  $('txCount').textContent=String(d.sources.comparables.total||0);
+  $('window').textContent=d.method.comparableWindow;
+  $('selection').textContent=d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m';
+  $('method').textContent=d.method.note;
+  const sourceRows=d.signals||[];
+  $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids dans le calcul : ${s.weight}%</div></div>`).join('');
+  const tx=d.sources.comparables.data||[];
+  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td></tr>`).join(''):'<tr><td colspan="6">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
+  $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
+}
 
-  function euro(value) {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-    return new Intl.NumberFormat("fr-FR", {style:"currency", currency:"EUR", maximumFractionDigits:0}).format(Number(value));
-  }
-
-  function number(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  function displayTransactions(items) {
-    if (!Array.isArray(items) || !items.length) {
-      return '<p class="small">Aucune transaction comparable retournée par l’API pour ces critères.</p>';
-    }
-
-    const rows = items.slice(0,10).map(tx => {
-      const sqm = tx.price && tx.livingArea ? Math.round(tx.price / tx.livingArea) : null;
-      return `<tr>
-        <td>${tx.date ? String(tx.date).slice(0,10) : "—"}</td>
-        <td>${euro(tx.price)}</td>
-        <td>${tx.livingArea ?? "—"} m²</td>
-        <td>${tx.landArea ?? "—"} m²</td>
-        <td>${sqm ? euro(sqm) + "/m²" : "—"}</td>
-      </tr>`;
-    }).join("");
-
-    return `<table>
-      <thead><tr><th>Date</th><th>Prix</th><th>Surface</th><th>Terrain</th><th>Prix/m²</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-  }
-
-  function renderResult(data) {
-    lastResult = data;
-    const v = data.valuation || {};
-
-    $("mainValuation").textContent = euro(v.mainValuation);
-    $("range").textContent = `Fourchette : ${euro(v.lowerValuation)} à ${euro(v.upperValuation)}`;
-    $("confidence").textContent = `Niveau de confiance Immo Data : ${v.confidence ?? "—"} / 5`;
-
-    const mp = data.marketPrice;
-    $("marketPrice").textContent = mp?.value != null ? `${euro(mp.value)} / m²` : "Non disponible";
-
-    const sd = data.saleDuration;
-    $("saleDuration").textContent = sd?.value != null ? `${sd.value} jours` : "Non disponible";
-
-    $("matchedAddress").textContent = data.property?.matchedAddress || data.property?.address || "—";
-
-    $("comparables").innerHTML = displayTransactions(data.transactions);
-
-    $("results").classList.remove("hidden");
-    $("sellerSection").classList.remove("hidden");
-    $("comparison").classList.add("hidden");
-    $("sellerPrice").value = "";
-
-    showSuccess("Estimation réalisée indépendamment du prix souhaité par le vendeur.");
-    $("results").scrollIntoView({behavior:"smooth"});
-  }
-
-  $("estimateBtn").addEventListener("click", async () => {
-    const button = $("estimateBtn");
-    button.disabled = true;
-    button.textContent = "Analyse en cours…";
-
-    try {
-      const payload = {
-        address: $("address").value.trim(),
-        realtyType: $("realtyType").value,
-        livingArea: number($("livingArea").value),
-        landArea: number($("landArea").value),
-        nbRooms: number($("nbRooms").value),
-        bathrooms: number($("bathrooms").value),
-        constructionYear: number($("constructionYear").value),
-        dpe: $("dpe").value,
-        condition: $("condition").value,
-        heating: $("heating").value.trim(),
-        garage: $("garage").checked,
-        parking: $("parking").checked,
-        cellar: $("cellar").checked,
-        terrace: $("terrace").checked,
-        garden: $("garden").checked,
-        niceView: $("niceView").checked,
-        pool: $("pool").checked,
-        works: $("works").value.trim()
-      };
-
-      const response = await fetch("/api/analyze", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(payload)
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
-
-      renderResult(data);
-    } catch (error) {
-      showError(error.message);
-    } finally {
-      button.disabled = false;
-      button.textContent = "Lancer l’estimation indépendante";
-    }
-  });
-
-  $("compareBtn").addEventListener("click", () => {
-    if (!lastResult?.valuation) return;
-
-    const seller = number($("sellerPrice").value);
-    const estimate = number(lastResult.valuation.mainValuation);
-
-    if (!seller || seller <= 0) {
-      showError("Saisissez le prix souhaité par le vendeur.");
-      return;
-    }
-    if (!estimate) {
-      showError("L’estimation n’est pas disponible.");
-      return;
-    }
-
-    const difference = seller - estimate;
-    const percent = (difference / estimate) * 100;
-    const text = difference >= 0
-      ? `Le prix vendeur est supérieur à l’estimation de ${euro(Math.abs(difference))} (${Math.abs(percent).toFixed(1)} %).`
-      : `Le prix vendeur est inférieur à l’estimation de ${euro(Math.abs(difference))} (${Math.abs(percent).toFixed(1)} %).`;
-
-    $("comparison").innerHTML = `<strong>Estimation marché :</strong> ${euro(estimate)}<br>
-      <strong>Prix vendeur :</strong> ${euro(seller)}<br><br>${text}`;
-    $("comparison").classList.remove("hidden");
-  });
+$('showCompare').onclick=()=>{ $('compare').style.display='block'; $('showCompare').style.display='none'; $('ownerPrice').focus(); };
+$('compareBtn').onclick=()=>{
+  const owner=Number($('ownerPrice').value||0); if(!owner) return;
+  const diff=owner-estimateValue; const pct=estimateValue?diff/estimateValue*100:0;
+  $('comparison').innerHTML='<b>Estimation JML :</b> '+euro(estimateValue)+'<br><b>Prix envisagé :</b> '+euro(owner)+'<br><b>Écart :</b> '+(diff>=0?'+':'')+euro(diff)+' ('+(pct>=0?'+':'')+pct.toFixed(1)+' %)';
+};
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 </script>
 </body>
 </html>
