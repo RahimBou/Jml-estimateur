@@ -84,14 +84,16 @@ function normalizeTransactions(raw, subject) {
   const data = Array.isArray(raw?.data) ? raw.data : [];
   return data.map(tx => {
     const attrs = tx.attributes || tx.realty || {};
+    const address = tx?.lot?.[0]?.location?.address || {};
     const point = extractPoint(tx);
-    const livingArea = cleanNumber(attrs.livingArea || tx.livingArea);
-    const landArea = cleanNumber(attrs.landArea || tx.landArea);
-    const rooms = cleanNumber(attrs.rooms || tx.rooms);
-    const price = cleanNumber(tx.price);
-    const sqmPrice = cleanNumber(tx.squareMeterPrice || (price && livingArea ? price / livingArea : 0));
+    const livingArea = firstNumber(attrs.livingArea, tx.livingArea);
+    const landArea = firstNumber(attrs.landArea, tx.landArea);
+    const rooms = firstNumber(attrs.rooms, attrs.numberOfRooms, tx.rooms, tx.numberOfRooms);
+    const constructionYear = firstNumber(attrs.constructionYear, attrs.yearBuilt, tx.constructionYear, tx.yearBuilt);
+    const price = firstNumber(tx.price);
+    const sqmPrice = firstNumber(tx.squareMeterPrice, price && livingArea ? price / livingArea : 0);
     const distanceKm = point ? haversineKm(subject.latitude, subject.longitude, point.lat, point.lon) : null;
-    const date = tx.txDate || "";
+    const date = tx.txDate || tx.date || "";
     return {
       txId: tx.txId || "",
       date,
@@ -100,52 +102,112 @@ function normalizeTransactions(raw, subject) {
       livingArea,
       landArea,
       rooms,
+      constructionYear,
       distanceKm,
-      streetName: tx?.lot?.[0]?.location?.address?.streetName || "",
-      streetNumber: tx?.lot?.[0]?.location?.address?.streetNumber || "",
-      cityName: tx?.lot?.[0]?.location?.address?.cityName || ""
+      realtyType: tx.realtyType || subject.realtyType,
+      streetName: address.streetName || "",
+      streetNumber: address.streetNumber || "",
+      cityName: address.cityName || ""
     };
   }).filter(tx => tx.price > 0 && tx.livingArea > 0 && tx.sqmPrice > 0);
 }
 
+function robustBounds(values) {
+  const clean = values.filter(Number.isFinite);
+  if (clean.length < 5) return null;
+  const q1 = percentile(clean, 0.25);
+  const q3 = percentile(clean, 0.75);
+  const iqr = q3 - q1;
+  if (!Number.isFinite(iqr) || iqr <= 0) return null;
+  return {
+    q1,
+    q3,
+    median: percentile(clean, 0.5),
+    low: Math.max(400, q1 - 1.5 * iqr),
+    high: q3 + 1.5 * iqr
+  };
+}
+
 function robustFilter(transactions) {
   if (transactions.length < 5) return transactions;
-  const prices = transactions.map(x => x.sqmPrice).filter(Number.isFinite);
-  const q1 = percentile(prices, 0.25);
-  const q3 = percentile(prices, 0.75);
-  const iqr = q3 - q1;
-  if (!Number.isFinite(iqr) || iqr <= 0) return transactions;
-
-  // Filtre volontairement robuste : on retire seulement les valeurs
-  // franchement atypiques, sans imposer une moyenne arbitraire du marché.
-  const low = Math.max(400, q1 - 1.5 * iqr);
-  const high = q3 + 1.5 * iqr;
-  return transactions.filter(x => x.sqmPrice >= low && x.sqmPrice <= high);
+  const bounds = robustBounds(transactions.map(x => x.sqmPrice));
+  if (!bounds) return transactions;
+  return transactions.filter(x => x.sqmPrice >= bounds.low && x.sqmPrice <= bounds.high);
 }
 
 function comparableScore(tx, subject, geo) {
+  const components = [];
+  const add = (name, points, available = true) => {
+    if (available) components.push({ name, points });
+  };
+
+  // 25 pts — surface similarity
   const surfaceRatio = subject.livingArea > 0
     ? Math.abs(tx.livingArea - subject.livingArea) / subject.livingArea
     : 1;
-  const roomGap = subject.rooms > 0 && tx.rooms > 0
-    ? Math.abs(tx.rooms - subject.rooms)
-    : 0;
-  const distance = tx.distanceKm == null ? 2.5 : tx.distanceKm;
-  const ageDays = Number.isFinite(new Date(tx.date).getTime())
-    ? Math.max(0, (Date.now() - new Date(tx.date).getTime()) / 86400000)
+  const surfaceScore = Math.max(0, Math.exp(-surfaceRatio * 3.2));
+  add("Surface", 25 * surfaceScore);
+
+  // 20 pts — geographic proximity. Same street gets a modest bonus inside the distance score.
+  const distance = tx.distanceKm == null ? 3 : tx.distanceKm;
+  let distanceScore = Math.exp(-distance / 0.85);
+  const sameStreet = geo?.streetName && tx.streetName &&
+    tx.streetName.trim().toLowerCase() === geo.streetName.trim().toLowerCase();
+  if (sameStreet) distanceScore = Math.min(1, distanceScore * 1.18);
+  add("Distance", 20 * distanceScore);
+
+  // 20 pts — recency. Recent sales matter more, but old sales remain usable.
+  const parsedDate = new Date(tx.date).getTime();
+  const ageDays = Number.isFinite(parsedDate)
+    ? Math.max(0, (Date.now() - parsedDate) / 86400000)
     : 730;
+  const recencyScore = Math.exp(-ageDays / 270);
+  add("Récence", 20 * recencyScore);
 
-  // Plus la vente est récente, proche et similaire en surface/pièces,
-  // plus elle pèse dans l'estimation.
-  const recency = Math.exp(-ageDays / 240);
-  const distanceScore = 1 / (1 + distance / 0.55);
-  const surfaceScore = Math.exp(-surfaceRatio * 3.2);
-  const roomScore = Math.exp(-roomGap * 0.55);
-  const streetBonus = geo?.streetName && tx.streetName
-    ? (tx.streetName.trim().toLowerCase() === geo.streetName.trim().toLowerCase() ? 1.35 : 1)
-    : 1;
+  // 15 pts — room count similarity, only when both sides are known.
+  if (subject.rooms > 0 && tx.rooms > 0) {
+    const roomGap = Math.abs(tx.rooms - subject.rooms);
+    add("Pièces", 15 * Math.exp(-roomGap * 0.70));
+  }
 
-  return recency * distanceScore * surfaceScore * roomScore * streetBonus;
+  // 10 pts — same realty type. The transaction query already restricts type,
+  // but we still verify it when the API provides the field.
+  if (tx.realtyType) add("Type", tx.realtyType === subject.realtyType ? 10 : 0);
+
+  // 5 pts — land similarity when both surfaces are known.
+  if (subject.landArea > 0 && tx.landArea > 0) {
+    const landRatio = Math.abs(tx.landArea - subject.landArea) / Math.max(subject.landArea, 100);
+    add("Terrain", 5 * Math.exp(-landRatio));
+  }
+
+  // 5 pts — construction year similarity when the transaction exposes it.
+  if (subject.constructionYear > 0 && tx.constructionYear > 0) {
+    const yearGap = Math.abs(tx.constructionYear - subject.constructionYear);
+    add("Année", 5 * Math.exp(-yearGap / 35));
+  }
+
+  const availableMax = components.reduce((s, c) => s + ({Surface:25,Distance:20,Récence:20,Pièces:15,Type:10,Terrain:5,Année:5}[c.name] || 0), 0);
+  const points = components.reduce((s, c) => s + c.points, 0);
+  const score = availableMax ? (points / availableMax) * 100 : 0;
+  const bounds = geo?.priceBounds;
+  let consistencyFactor = 1;
+  let atypical = false;
+  if (bounds && Number.isFinite(bounds.median) && bounds.median > 0) {
+    const ratio = tx.sqmPrice / bounds.median;
+    const deviation = Math.abs(Math.log(ratio));
+    // Soft penalty rather than deleting potentially legitimate high/low sales.
+    consistencyFactor = Math.max(0.35, Math.exp(-0.95 * deviation * deviation));
+    atypical = tx.sqmPrice < bounds.low || tx.sqmPrice > bounds.high;
+  }
+
+  return {
+    score,
+    relevanceScore: Math.max(0.01, score / 100),
+    consistencyFactor,
+    influenceScore: Math.max(0.01, (score / 100) * consistencyFactor),
+    atypical,
+    scoreBreakdown: components.map(c => ({ name: c.name, points: Number(c.points.toFixed(1)) }))
+  };
 }
 
 function rankComparables(transactions, subject, geo) {
@@ -153,10 +215,12 @@ function rankComparables(transactions, subject, geo) {
 
   const filtered = robustFilter(transactions);
   const source = filtered.length >= 3 ? filtered : transactions;
+  const bounds = robustBounds(source.map(x => x.sqmPrice));
+  const scoringGeo = { ...geo, priceBounds: bounds };
 
   return source
-    .map(tx => ({ ...tx, relevanceScore: comparableScore(tx, subject, geo) }))
-    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+    .map(tx => ({ ...tx, ...comparableScore(tx, subject, scoringGeo) }))
+    .sort((a, b) => b.influenceScore - a.influenceScore);
 }
 
 function weightedMean(items, valueKey, weightFn) {
@@ -334,20 +398,32 @@ async function findComparables(subject, realtyType, geo) {
     selectedRaw = ranked;
     usedStage = stage;
 
-    // On arrête dès que nous avons un échantillon exploitable.
+    // On élargit uniquement si l'échantillon réellement pertinent est insuffisant.
     if (ranked.length >= 8) break;
     if (ranked.length >= 3 && stage === stages[stages.length - 1]) break;
   }
 
   const retained = selectedRaw.slice(0, 15);
+  const weightFn = x => Math.max(0.01, x.influenceScore || x.relevanceScore || 0.01);
   const ppsmValues = retained.map(x => x.sqmPrice);
   const medianPpsm = median(ppsmValues);
-  const weightFn = x => Math.max(0.01, x.relevanceScore);
   const weightedPpsm = weightedMean(retained, "sqmPrice", weightFn);
   const effectivePpsm = weightedPpsm || medianPpsm;
   const estimatedValue = effectivePpsm ? effectivePpsm * subject.livingArea : null;
   const weightedStd = effectivePpsm ? weightedStdDev(retained, "sqmPrice", weightFn, effectivePpsm) : null;
   const dispersion = effectivePpsm && weightedStd ? weightedStd / effectivePpsm : null;
+  const selectedPpsm = retained.map(x => x.sqmPrice).filter(Number.isFinite);
+  const p25 = percentile(selectedPpsm, 0.25);
+  const p75 = percentile(selectedPpsm, 0.75);
+  const atypicalCount = retained.filter(x => x.atypical).length;
+  const averageScore = retained.length
+    ? retained.reduce((sum, x) => sum + x.score, 0) / retained.length
+    : 0;
+  const totalInfluence = retained.reduce((sum, x) => sum + Math.max(0.01, x.influenceScore || 0.01), 0);
+  const dataWithInfluence = retained.map(x => ({
+    ...x,
+    influencePercent: totalInfluence ? Math.round((Math.max(0.01, x.influenceScore || 0.01) / totalInfluence) * 1000) / 10 : 0
+  }));
 
   return {
     total: selectedRaw.length,
@@ -360,7 +436,11 @@ async function findComparables(subject, realtyType, geo) {
     weightedPpsm,
     estimatedValue,
     dispersion,
-    data: retained
+    p25,
+    p75,
+    atypicalCount,
+    averageScore,
+    data: dataWithInfluence
   };
 }
 
@@ -373,7 +453,13 @@ function listingMedianPpsm(raw) {
 
 function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject }) {
   const signals = [];
-  if (comparables?.estimatedValue) signals.push({ name: "Ventes DVF comparables", value: comparables.estimatedValue, weight: comparables.retainedTotal >= 8 ? 0.50 : comparables.retainedTotal >= 5 ? 0.46 : comparables.retainedTotal >= 3 ? 0.40 : 0.28 });
+  const comparableQuality = Number.isFinite(comparables?.averageScore) ? comparables.averageScore / 100 : 0;
+  const comparableWeight = comparables?.retainedTotal >= 8
+    ? (comparableQuality >= 0.70 ? 0.55 : 0.50)
+    : comparables?.retainedTotal >= 5 ? 0.48
+    : comparables?.retainedTotal >= 3 ? 0.40 : 0.28;
+
+  if (comparables?.estimatedValue) signals.push({ name: "Ventes DVF comparables", value: comparables.estimatedValue, weight: comparableWeight });
   if (valuation?.mainValuation) signals.push({ name: "Modèle d'estimation", value: valuation.mainValuation, weight: valuation.confidence >= 4 ? 0.25 : valuation.confidence >= 3 ? 0.20 : 0.15 });
   if (districtPrice?.value) signals.push({ name: "Prix du grand quartier", value: districtPrice.value * subject.livingArea, weight: 0.12 });
   if (cityPrice?.value) signals.push({ name: "Prix de la commune", value: cityPrice.value * subject.livingArea, weight: 0.08 });
@@ -387,21 +473,47 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   const raw = signals.reduce((s, x) => s + x.value * x.weight, 0) / totalWeight;
   const main = round1000(raw);
 
-  const spreadBase = comparables?.retainedTotal >= 8 ? 0.075 : comparables?.retainedTotal >= 5 ? 0.09 : comparables?.retainedTotal >= 3 ? 0.11 : 0.15;
   const apiSpread = valuation?.lowerValuation && valuation?.upperValuation && valuation.mainValuation
     ? Math.max((valuation.upperValuation - valuation.lowerValuation) / (2 * valuation.mainValuation), 0)
-    : spreadBase;
-  const dispersionSpread = Number.isFinite(comparables?.dispersion)
-    ? Math.min(0.20, Math.max(0.055, comparables.dispersion * 0.75))
-    : spreadBase;
-  const spread = Math.min(0.22, Math.max(spreadBase, apiSpread, dispersionSpread));
+    : null;
+  const compSpread = Number.isFinite(comparables?.dispersion)
+    ? Math.min(0.18, Math.max(0.055, comparables.dispersion * 0.55))
+    : null;
+  const qualityGood = comparables?.retainedTotal >= 8 && comparableQuality >= 0.70;
+  const baseSpread = comparables?.retainedTotal >= 8 ? 0.075 : comparables?.retainedTotal >= 5 ? 0.09 : comparables?.retainedTotal >= 3 ? 0.11 : 0.15;
+
+  // V5.3 : la fourchette combine l'incertitude du modèle et la dispersion réelle
+  // des comparables. Une API très large ne doit plus, à elle seule, imposer une
+  // fourchette extrêmement large lorsque les comparables sont homogènes.
+  let spread = baseSpread;
+  if (apiSpread != null && compSpread != null) {
+    spread = qualityGood
+      ? (apiSpread * 0.45 + compSpread * 0.55)
+      : (apiSpread * 0.60 + compSpread * 0.40);
+  } else if (compSpread != null) {
+    spread = compSpread;
+  } else if (apiSpread != null) {
+    spread = apiSpread;
+  }
+  spread = Math.min(0.20, Math.max(0.07, spread));
+
+  const displaySignals = signals.map(s => ({
+    ...s,
+    value: round100(s.value),
+    weight: Math.round((s.weight / totalWeight) * 100)
+  }));
+  const displayedWeightTotal = displaySignals.reduce((sum, s) => sum + s.weight, 0);
+  if (displaySignals.length && displayedWeightTotal !== 100) {
+    displaySignals[0].weight += 100 - displayedWeightTotal;
+  }
 
   return {
     main,
     low: round1000(main * (1 - spread)),
     high: round1000(main * (1 + spread)),
-    signals: signals.map(s => ({ ...s, value: round100(s.value), weight: Math.round((s.weight / totalWeight) * 100) })),
-    spread
+    signals: displaySignals,
+    spread,
+    comparableQuality
   };
 }
 
@@ -412,10 +524,17 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
   else if (comparables?.retainedTotal >= 7) score += 1.8;
   else if (comparables?.retainedTotal >= 4) score += 1.4;
   else if (comparables?.retainedTotal >= 1) score += 0.6;
+
+  const quality = Number(comparables?.averageScore || 0);
+  if (quality >= 80) score += 0.8;
+  else if (quality >= 70) score += 0.6;
+  else if (quality >= 60) score += 0.3;
+
   if (Number.isFinite(comparables?.dispersion)) {
     if (comparables.dispersion <= 0.15) score += 0.7;
     else if (comparables.dispersion <= 0.25) score += 0.3;
   }
+  if (comparables?.retainedTotal && comparables.atypicalCount / comparables.retainedTotal <= 0.20) score += 0.2;
   if (districtPrice?.value) score += 0.6;
   if (cityPrice?.value) score += 0.4;
   if (listingMedianPpsm(listings)) score += 0.4;
@@ -423,7 +542,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.2.0", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.3.0", apiKeyConfigured: Boolean(API_KEY) });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -499,7 +618,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceScore({ valuation, comparables, cityPrice, districtPrice, listings });
 
     const result = {
-      version: "5.2.0",
+      version: "5.3.0",
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -549,7 +668,10 @@ app.post("/api/analyze", async (req, res) => {
         comparableWindow: `${comparables.months} mois`,
         comparableRadius: `${comparables.radiusMeters} m`,
         comparableSelection: comparables.stage,
-        note: `Les ventes DVF sont classées selon la proximité, la récence et la similarité du bien. ${comparables.foundTotal} transaction(s) ont été trouvée(s) et ${comparables.retainedTotal} comparable(s) ont été retenu(s) pour le calcul. Les valeurs atypiques sont écartées lorsqu'elles sont statistiquement très éloignées du marché. La recherche s'élargit automatiquement seulement si nécessaire.`
+        averageComparableScore: Math.round(comparables.averageScore),
+        atypicalComparables: comparables.atypicalCount,
+        dispersion: comparables.dispersion,
+        note: `Les ventes DVF sont classées selon la proximité, la récence, la surface et la similarité du bien. ${comparables.foundTotal} transaction(s) ont été trouvée(s) et ${comparables.retainedTotal} comparable(s) ont été retenu(s) pour le calcul. Chaque vente reçoit un score de pertinence sur 100 et un poids d'influence. Les valeurs atypiques sont soit écartées statistiquement, soit pénalisées dans leur influence lorsqu'elles restent utiles. La recherche s'élargit automatiquement seulement si nécessaire.`
       },
       signals: final.signals
     };
@@ -562,5 +684,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.3 sur http://localhost:${PORT}`);
 });
