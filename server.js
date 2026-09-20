@@ -138,37 +138,47 @@ function ageMonthsFromDate(date) {
   return Math.max(0, (Date.now() - t) / (30.4375 * 86400000));
 }
 
-function comparableScore(tx, subject) {
+function comparableStructuralScore(tx, subject) {
   const surfaceRatio = subject.livingArea > 0 && tx.livingArea > 0
-    ? Math.abs(tx.livingArea - subject.livingArea) / subject.livingArea
-    : 1;
+    ? Math.abs(tx.livingArea - subject.livingArea) / subject.livingArea : 1;
   const distance = Number.isFinite(tx.distanceKm) ? tx.distanceKm : 3;
   const ageMonths = ageMonthsFromDate(tx.date);
   const roomGap = subject.rooms > 0 && tx.rooms > 0 ? Math.abs(tx.rooms - subject.rooms) : 0;
 
-  const surfaceScore = 30 * clamp(1 - surfaceRatio / 0.30, 0, 1);
-  const distanceScore = 25 * clamp(1 - distance / 3, 0, 1);
-  const recencyScore = 20 * clamp(1 - (ageMonths == null ? 24 : ageMonths) / 24, 0, 1);
+  const surfaceScore = 30 * clamp(1 - surfaceRatio / 0.25, 0, 1);
+  const distanceScore = 20 * clamp(1 - distance / 2.5, 0, 1);
+  const recencyScore = 15 * clamp(1 - (ageMonths == null ? 24 : ageMonths) / 24, 0, 1);
   const roomScore = subject.rooms > 0 && tx.rooms > 0
-    ? 15 * clamp(1 - roomGap / 3, 0, 1)
-    : 8;
+    ? 20 * clamp(1 - roomGap / 2, 0, 1) : 10;
   const landScore = subject.landArea > 0 && tx.landArea > 0
-    ? 10 * clamp(1 - Math.abs(tx.landArea - subject.landArea) / Math.max(subject.landArea, 1), 0, 1)
-    : 5;
+    ? 15 * clamp(1 - Math.abs(tx.landArea - subject.landArea) / Math.max(subject.landArea, 1), 0, 1) : 8;
 
-  return Math.round(surfaceScore + distanceScore + recencyScore + roomScore + landScore);
+  return surfaceScore + distanceScore + recencyScore + roomScore + landScore;
 }
 
-function similarityWeight(tx, subject) {
+function comparableScore(tx, subject, anchorPpsm = null) {
+  const structural = comparableStructuralScore(tx, subject);
+  if (!Number.isFinite(anchorPpsm) || anchorPpsm <= 0 || !Number.isFinite(tx.sqmPrice)) return Math.round(structural);
+  const priceDeviation = Math.abs(tx.sqmPrice - anchorPpsm) / anchorPpsm;
+  // La cohérence de prix sert à départager les ventes structurellement proches.
+  // Elle ne supprime jamais totalement une vente : elle réduit seulement son influence.
+  const priceFit = clamp(Math.exp(-priceDeviation / 0.35), 0.20, 1);
+  return Math.round(structural * 0.82 + priceFit * 18);
+}
+
+function similarityWeight(tx, subject, anchorPpsm = null) {
   const surfaceRatio = subject.livingArea > 0 ? Math.abs(tx.livingArea - subject.livingArea) / subject.livingArea : 1;
   const roomGap = subject.rooms > 0 && tx.rooms > 0 ? Math.abs(tx.rooms - subject.rooms) : 0;
   const distance = Number.isFinite(tx.distanceKm) ? tx.distanceKm : 1.5;
   const ageMonths = ageMonthsFromDate(tx.date);
-  const recency = ageMonths == null ? 0.35 : Math.exp(-ageMonths / 6);
-  const distanceWeight = 1 / (1 + distance / 0.5);
-  const surfaceWeight = Math.exp(-surfaceRatio * 3);
-  const roomWeight = Math.exp(-roomGap * 0.5);
-  return Math.max(0.01, recency * distanceWeight * surfaceWeight * roomWeight);
+  const recency = ageMonths == null ? 0.35 : Math.exp(-ageMonths / 7);
+  const distanceWeight = 1 / (1 + distance / 0.6);
+  const surfaceWeight = Math.exp(-surfaceRatio * 4);
+  const roomWeight = Math.exp(-roomGap * 0.8);
+  const priceFit = Number.isFinite(anchorPpsm) && anchorPpsm > 0 && Number.isFinite(tx.sqmPrice)
+    ? clamp(Math.exp(-(Math.abs(tx.sqmPrice - anchorPpsm) / anchorPpsm) / 0.35), 0.25, 1)
+    : 1;
+  return Math.max(0.01, recency * distanceWeight * surfaceWeight * roomWeight * priceFit);
 }
 
 function weightedMean(items, valueKey, weightFn) {
@@ -203,12 +213,37 @@ function cloneJson(value) {
 }
 
 function mockResponse(endpoint, params) {
-  if (endpoint === "/v1/geocode") return [{ geoLevel: "address", label: params.q || "Adresse test", longitude: 3.235, latitude: 50.175, cityName: "Cambrai", postCode: "59400", inseeCode: "59122", districtCode: "TEST-DISTRICT", districtName: "Grand quartier test" }];
-  if (endpoint === "/v1/market/price/current") return { value: 1760 };
-  if (endpoint === "/v1/valuation") return { mainValuation: 188000, lowerValuation: 160000, upperValuation: 215000, confidence: 4 };
+  // V6.4 : jeu de données gratuit volontairement réaliste et déterministe.
+  // Il ne reproduit pas une base DVF réelle et ne consomme aucun crédit.
+  if (endpoint === "/v1/geocode") {
+    return [{
+      geoLevel: "address",
+      label: params.q || "Adresse test",
+      longitude: 4.7167, latitude: 49.7625,
+      cityName: "Charleville-Mézières", postCode: "08000", inseeCode: "08105",
+      districtCode: "TEST-DISTRICT-08000", districtName: "Secteur test Charleville-Mézières"
+    }];
+  }
+  if (endpoint === "/v1/market/price/current") return { value: 1360 };
+  if (endpoint === "/v1/valuation") return { mainValuation: 104000, lowerValuation: 90000, upperValuation: 119000, confidence: 4 };
   if (endpoint === "/v1/transactions") {
-    const area = Number(params.livingAreaMin || 100) + 10;
-    return { data: Array.from({ length: 18 }, (_, i) => ({ txId: `MOCK-${i+1}`, txDate: isoDateMonthsAgo(Math.max(1, i % 18)), price: (1550 + (i % 6) * 75) * area, squareMeterPrice: 1550 + (i % 6) * 75, attributes: { livingArea: area + (i % 5) - 2, landArea: 300 + i * 12, rooms: 4 }, lot: [{ location: { geometry: { coordinates: [3.235 + i * 0.001, 50.175 + i * 0.001] }, address: { streetName: `Rue test ${i+1}`, streetNumber: `${i+1}` } } }] })) };
+    const targetArea = (Number(params.livingAreaMin || 42) + Number(params.livingAreaMax || 98)) / 2;
+    const ppsm = [1550,1415,1370,1125,1615,985,1400,1455,1240,1110,870,541,858,1235,1320,1490,1565,1180,1285,1440,1510,1350,1295,1160,1020,1475,1580,1310,1390,1215,1450,1525,1335,1270,1095,1425,1500,1365,1185,1305,1465,1540,1340,1260,1135,1410,1480,1570,1290,1375,1435,1195,1325,1515,1385,1245,1460,1555,1355,1280,1150,1405,1470,1590,1315,1360,1420,1205,1300,1495,1535,1345,1255,1115,1395,1455,1560,1275,1330,1485,1520,1295,1175,1415,1505,1350,1225,1445,1585,1310,1380,1465,1265,1105,1400,1510,1365,1235,1475,1550];
+    return { data: ppsm.map((pricePerSqm, i) => {
+      const area = Math.round((targetArea + ((i * 7) % 9) - 4) * 10) / 10;
+      const rooms = [3,3,3,4,3,3,4,3,3,4][i % 10];
+      const monthsAgo = 1 + ((i * 5) % 23);
+      const distance = 0.25 + (((i * 17) % 130) / 100);
+      const angle = i * 0.37;
+      const lat = 49.7625 + Math.sin(angle) * distance / 111;
+      const lon = 4.7167 + Math.cos(angle) * distance / (111 * Math.cos(49.7625 * Math.PI / 180));
+      return {
+        txId: `MOCK-${i+1}`, txDate: isoDateMonthsAgo(monthsAgo),
+        price: Math.round(pricePerSqm * area), squareMeterPrice: pricePerSqm,
+        attributes: { livingArea: area, landArea: 0, rooms },
+        lot: [{ location: { geometry: { coordinates: [lon, lat] }, address: { streetName: `Rue test ${i+1}`, streetNumber: `${10 + i}` } } }]
+      };
+    }) };
   }
   return {};
 }
@@ -362,8 +397,25 @@ async function findComparables(subject, realtyType, requestId = null) {
   const normalizedBeforeFilter = normalizeTransactions(raw, subject);
   const filterResult = robustFilter(normalizedBeforeFilter);
   const filtered = filterResult.items;
-  const scored = filtered.map(x => ({ ...x, score: comparableScore(x, subject),
-    ageMonths: ageMonthsFromDate(x.date), rawWeight: similarityWeight(x, subject) }));
+
+  // V6.4 : d'abord les caractéristiques objectives, puis seulement ensuite le niveau
+  // de prix. On évite ainsi qu'une vente à 500 €/m² devienne un "bon comparable"
+  // uniquement parce qu'elle est à 400 m. L'ancrage prix est calculé sur les 20 ventes
+  // structurellement les plus proches, puis utilisé comme filtre doux de cohérence.
+  const structural = filtered
+    .map(x => ({ ...x, structuralScore: comparableStructuralScore(x, subject) }))
+    .sort((a, b) => b.structuralScore - a.structuralScore);
+  const anchorPool = structural.slice(0, Math.min(20, structural.length));
+  const anchorPpsm = median(anchorPool.map(x => x.sqmPrice));
+
+  const scored = filtered.map(x => ({
+    ...x,
+    anchorPpsm,
+    score: comparableScore(x, subject, anchorPpsm),
+    ageMonths: ageMonthsFromDate(x.date),
+    rawWeight: similarityWeight(x, subject, anchorPpsm),
+    priceDeviationPct: anchorPpsm > 0 ? Math.round(Math.abs(x.sqmPrice - anchorPpsm) / anchorPpsm * 100) : null
+  }));
   scored.sort((a, b) => b.score - a.score || b.rawWeight - a.rawWeight);
 
   const retained = scored.slice(0, 15);
@@ -378,6 +430,7 @@ async function findComparables(subject, realtyType, requestId = null) {
     foundCount: normalizedBeforeFilter.length, analyzedCount: filtered.length, total: ranked.length,
     stage: "Secteur élargi — 24 mois", radiusMeters: 3000, months: 24, medianPpsm, weightedPpsm, filterMode: filterResult.mode, filterReason: filterResult.reason,
     estimatedValue: effectivePpsm ? effectivePpsm * subject.livingArea : null,
+    anchorPpsm,
     avgScore: ranked.length ? ranked.reduce((s, x) => s + x.score, 0) / ranked.length : null,
     avgDistanceKm: ranked.length ? ranked.reduce((s, x) => s + (Number.isFinite(x.distanceKm) ? x.distanceKm : 3), 0) / ranked.length : null,
     avgAgeMonths: ranked.length ? ranked.reduce((s, x) => s + (x.ageMonths == null ? 24 : x.ageMonths), 0) / ranked.length : null,
@@ -652,7 +705,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "6.3.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "6.4.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -752,7 +805,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "6.3.0",
+      version: "6.4.0",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -812,7 +865,7 @@ app.post("/api/analyze", async (req, res) => {
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
           valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}${valuationResult.error.apiBody?.message ? ` (${valuationResult.error.apiBody.message})` : ""}.` : null
         ].filter(Boolean).join(" ") || null,
-        note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les poids sont calculés selon la qualité de chaque source, puis ajustés selon leur accord avec un consensus robuste. Le prix souhaité n’intervient jamais dans le calcul."
+        note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les comparables sont d’abord classés par similitude structurelle, puis pondérés par cohérence de prix ; les ventes atypiques gardent une influence réduite sans être supprimées arbitrairement. Les poids des sources sont ensuite ajustés selon leur accord avec un consensus robuste. Le prix souhaité n’intervient jamais dans le calcul."
       },
       api: { maxCallsPerAnalysis: 4, cachedResponses: API_CACHE.size, transactionsUnavailable: Boolean(comparables.unavailable), valuationUnavailable: Boolean(valuationResult.error), listingsEnabled: false, cityPriceEnabled: false, mockMode: MOCK_API_MODE },
       signals: final.signals
@@ -827,7 +880,7 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V6.3.0 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V6.4.0 sur http://localhost:${PORT}`);
   console.log(MOCK_API_MODE
     ? "MODE TEST GRATUIT : aucune requête Immo Data réelle ne sera envoyée."
     : "MODE API RÉELLE : les appels Immo Data peuvent consommer des crédits.");
