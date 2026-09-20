@@ -1,15 +1,9 @@
 {
   "name": "jml-estimateur-v5",
-  "version": "5.3.0",
+  "version": "5.4.0",
   "private": true,
-  "description": "Estimateur immobilier JML — scoring des comparables DVF, pondération intelligente et estimation multi-sources",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "express": "^4.21.2"
-  }
+  "description": "Estimateur immobilier JML — comparables DVF, marché local, fiabilité automatique et budget API",
+  "scripts": {"start": "node server.js"},
+  "engines": {"node": ">=18"},
+  "dependencies": {"express": "^4.21.2"}
 }
