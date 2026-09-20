@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V5.2</title>
+<title>JML Immobilier — Estimateur V5.3</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -16,13 +16,13 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 .error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
 .result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
 .sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
-.tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
+.tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.score{font-weight:900}.tag{display:inline-block;padding:3px 7px;border-radius:999px;background:var(--soft);font-size:11px;font-weight:800}.tag.warn{background:var(--warn)}.tablewrap{overflow:auto}
 .compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.2 — analyse multi-sources, comparables pondérés et détection des atypiques</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3 — scoring des comparables, pondération intelligente et détection des atypiques</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -67,7 +67,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
 <div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
 </section>
@@ -104,12 +104,12 @@ function render(d){
   $('txCount').textContent=String(d.sources.comparables.retainedTotal||d.sources.comparables.total||0);
   $('txCount').title=String(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' transactions trouvées';
   $('window').textContent=d.method.comparableWindow; $('duration').textContent=d.sources.saleDuration ? d.sources.saleDuration+' j' : '—';
-  $('selection').textContent=d.method.comparableSelection+' · '+(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' trouvées · '+(d.sources.comparables.retainedTotal||d.sources.comparables.total||0)+' retenues · rayon '+d.sources.comparables.radiusMeters+' m';
+  $('selection').innerHTML=escapeHtml(d.method.comparableSelection)+' · '+(d.sources.comparables.foundTotal||d.sources.comparables.total||0)+' trouvées · '+(d.sources.comparables.retainedTotal||d.sources.comparables.total||0)+' retenues · rayon '+d.sources.comparables.radiusMeters+' m · score moyen <b>'+Number(d.method.averageComparableScore||0)+'/100</b>'+(d.method.atypicalComparables?' · '+d.method.atypicalComparables+' atypique(s)':'');
   $('method').textContent=d.method.note;
   const sourceRows=d.signals||[];
   $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids dans le calcul : ${s.weight}%</div></div>`).join('');
   const tx=d.sources.comparables.data||[];
-  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td></tr>`).join(''):'<tr><td colspan="6">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
+  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td><span class="score">${Math.round(x.score||0)}/100</span>${x.atypical?' <span class="tag warn">Atypique</span>':''}</td><td><span class="tag">${Number(x.influencePercent||0).toFixed(1)}%</span></td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue.</td></tr>';
   $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
 }
 
