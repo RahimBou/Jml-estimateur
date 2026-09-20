@@ -22,7 +22,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.3.1 — analyse multi-sources, comparables et fiabilité automatique</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -63,7 +63,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 
 <section id="result" class="result">
 <div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
-<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
+<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Comparables retenus</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p></div>
 
@@ -107,8 +107,9 @@ function render(d){
   $('reliability').innerHTML=(rel.factors||[]).map(f=>`<div class="relRow"><div class="relTop"><span>${escapeHtml(f.label)}</span><span>${f.score}/${f.max}</span></div><div class="relMeta">${escapeHtml(f.detail)}</div><div class="relBar"><i style="width:${Math.max(0,Math.min(100,(f.score/f.max)*100))}%"></i></div></div>`).join('');
   $('ppsm').textContent=euro(d.estimate.pricePerSqm);
   $('txCount').textContent=String(d.sources.comparables.total||0);
+  $('txCount').title=(d.sources.comparables.foundCount||d.sources.comparables.total||0)+' transactions analysées';
   $('window').textContent=d.method.comparableWindow;
-  $('selection').textContent=d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m';
+  $('selection').textContent=d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m · '+(d.sources.comparables.foundCount||d.sources.comparables.total||0)+' transactions analysées → '+(d.sources.comparables.total||0)+' retenues';
   $('method').textContent=d.method.note;
   const sourceRows=d.signals||[];
   $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids dans le calcul : ${s.weight}%</div></div>`).join('');
