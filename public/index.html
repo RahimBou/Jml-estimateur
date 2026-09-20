@@ -13,7 +13,7 @@ h2{font-size:18px;margin:0 0 16px}.hint{color:var(--muted);font-size:13px;line-h
 label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff}input:focus,select:focus,textarea:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
 .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.check{border:1px solid var(--line);padding:10px;border-radius:9px;display:flex;gap:8px;align-items:center;font-size:13px}.check input{width:auto}
 button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}button:disabled{opacity:.55;cursor:wait}
-.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
+.typeGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.typeBtn{margin:0!important;padding:11px 8px!important;background:#fff!important;color:var(--ink)!important;border:1px solid var(--line)!important;font-size:13px!important;font-weight:800!important}.typeBtn.active{background:var(--soft)!important;border:2px solid var(--brand)!important;color:var(--brand)!important}.typeBtn span{display:block;font-size:21px;margin-bottom:3px}@media(max-width:700px){.typeGrid{grid-template-columns:repeat(2,1fr)}}.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
 .result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}.confidenceDetail{margin-top:8px;color:var(--muted);font-size:13px}.reliability{display:grid;gap:10px}.relRow{border:1px solid var(--line);border-radius:10px;padding:11px}.relTop{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:800}.relMeta{font-size:12px;color:var(--muted);margin-top:4px}.relBar{height:6px;background:#e8edf2;border-radius:99px;overflow:hidden;margin-top:8px}.relBar i{display:block;height:100%;background:var(--brand)}.relSummary{background:var(--soft);border-radius:10px;padding:12px;font-size:13px;line-height:1.5}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
 .sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
 .tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
@@ -43,6 +43,7 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
   <option value="industrial">🏭 Local industriel / entrepôt</option>
   <option value="other">🏠 Autre bien</option>
 </select>
+<div id="typeGrid" class="typeGrid" aria-label="Choisir le type de bien"></div>
 </div>
 <div id="fieldLivingArea"><label id="livingAreaLabel">Surface habitable (m²)</label><input id="livingArea" type="number" min="1" step="1" required placeholder="120"></div>
 <div id="fieldLandArea"><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
@@ -154,8 +155,36 @@ document.addEventListener('DOMContentLoaded', () => {
     ? currentType
     : 'house';
 
-  typeSelect.addEventListener('change', updatePropertyFields);
+  // Sélecteur visuel : toutes les catégories restent visibles, même sur mobile.
+  const typeGrid = $('typeGrid');
+  typeGrid.innerHTML = typeOptions.map(([value,label]) => {
+    const parts = label.split(' ');
+    const emoji = parts.shift();
+    const text = parts.join(' ');
+    return `<button type="button" class="typeBtn" data-type="${value}"><span>${emoji}</span>${text}</button>`;
+  }).join('');
+
+  function syncTypeButtons(){
+    typeGrid.querySelectorAll('.typeBtn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.type === typeSelect.value);
+    });
+  }
+
+  typeGrid.addEventListener('click', e => {
+    const btn = e.target.closest('.typeBtn');
+    if (!btn) return;
+    typeSelect.value = btn.dataset.type;
+    updatePropertyFields();
+    syncTypeButtons();
+  });
+
+  typeSelect.addEventListener('change', () => {
+    updatePropertyFields();
+    syncTypeButtons();
+  });
+
   updatePropertyFields();
+  syncTypeButtons();
 });
 
 $('form').addEventListener('submit', async e => {
