@@ -1,4 +1,4 @@
-// JML Immobilier — Estimateur V5
+// JML Immobilier — Estimateur V5.4
 // Objectif : combiner plusieurs signaux immobiliers sans demander le prix souhaité
 // avant d'avoir terminé l'analyse.
 //
@@ -196,7 +196,9 @@ function comparableScore(tx, subject, geo) {
     const ratio = tx.sqmPrice / bounds.median;
     const deviation = Math.abs(Math.log(ratio));
     // Soft penalty rather than deleting potentially legitimate high/low sales.
-    consistencyFactor = Math.max(0.35, Math.exp(-0.95 * deviation * deviation));
+    // Pénalité robuste : les prix très éloignés de la médiane gardent une
+    // trace dans le tableau, mais influencent beaucoup moins le calcul.
+    consistencyFactor = Math.max(0.18, Math.exp(-1.35 * deviation * deviation));
     atypical = tx.sqmPrice < bounds.low || tx.sqmPrice > bounds.high;
   }
 
@@ -249,6 +251,21 @@ function weightedStdDev(items, valueKey, weightFn, mean) {
     }
   }
   return weights ? Math.sqrt(variance / weights) : null;
+}
+
+function weightedMedian(items, valueKey, weightFn) {
+  const rows = items
+    .map(item => ({ value: Number(item[valueKey]), weight: Number(weightFn(item)) }))
+    .filter(x => Number.isFinite(x.value) && Number.isFinite(x.weight) && x.weight > 0)
+    .sort((a, b) => a.value - b.value);
+  if (!rows.length) return null;
+  const total = rows.reduce((s, x) => s + x.weight, 0);
+  let cumulative = 0;
+  for (const row of rows) {
+    cumulative += row.weight;
+    if (cumulative >= total / 2) return row.value;
+  }
+  return rows[rows.length - 1].value;
 }
 
 async function immo(endpoint, params = {}) {
@@ -404,25 +421,39 @@ async function findComparables(subject, realtyType, geo) {
   }
 
   const retained = selectedRaw.slice(0, 15);
-  const weightFn = x => Math.max(0.01, x.influenceScore || x.relevanceScore || 0.01);
-  const ppsmValues = retained.map(x => x.sqmPrice);
+  // Pour le calcul principal, on écarte seulement les comparables très faibles.
+  // Ils restent visibles dans le tableau afin de conserver la transparence.
+  const calculationPool = retained.filter(x => x.score >= 45);
+  const core = calculationPool.length >= 5 ? calculationPool : retained;
+  const weightFn = x => {
+    const scoreWeight = Math.pow(Math.max(0.01, x.score / 100), 1.35);
+    const consistency = Math.max(0.18, x.consistencyFactor || 1);
+    return Math.max(0.01, scoreWeight * consistency);
+  };
+  const ppsmValues = core.map(x => x.sqmPrice);
   const medianPpsm = median(ppsmValues);
-  const weightedPpsm = weightedMean(retained, "sqmPrice", weightFn);
-  const effectivePpsm = weightedPpsm || medianPpsm;
+  const weightedMedianPpsm = weightedMedian(core, "sqmPrice", weightFn);
+  const weightedPpsm = weightedMean(core, "sqmPrice", weightFn);
+  // La médiane pondérée constitue le socle robuste ; la moyenne apporte une
+  // légère sensibilité aux différences réelles du marché.
+  const effectivePpsm = weightedMedianPpsm && weightedPpsm
+    ? (weightedMedianPpsm * 0.65 + weightedPpsm * 0.35)
+    : (weightedMedianPpsm || weightedPpsm || medianPpsm);
   const estimatedValue = effectivePpsm ? effectivePpsm * subject.livingArea : null;
-  const weightedStd = effectivePpsm ? weightedStdDev(retained, "sqmPrice", weightFn, effectivePpsm) : null;
+  const weightedStd = effectivePpsm ? weightedStdDev(core, "sqmPrice", weightFn, effectivePpsm) : null;
   const dispersion = effectivePpsm && weightedStd ? weightedStd / effectivePpsm : null;
-  const selectedPpsm = retained.map(x => x.sqmPrice).filter(Number.isFinite);
+  const selectedPpsm = core.map(x => x.sqmPrice).filter(Number.isFinite);
   const p25 = percentile(selectedPpsm, 0.25);
   const p75 = percentile(selectedPpsm, 0.75);
   const atypicalCount = retained.filter(x => x.atypical).length;
-  const averageScore = retained.length
-    ? retained.reduce((sum, x) => sum + x.score, 0) / retained.length
+  const averageScore = core.length
+    ? core.reduce((sum, x) => sum + x.score, 0) / core.length
     : 0;
-  const totalInfluence = retained.reduce((sum, x) => sum + Math.max(0.01, x.influenceScore || 0.01), 0);
+  const totalInfluence = core.reduce((sum, x) => sum + Math.max(0.01, weightFn(x)), 0);
   const dataWithInfluence = retained.map(x => ({
     ...x,
-    influencePercent: totalInfluence ? Math.round((Math.max(0.01, x.influenceScore || 0.01) / totalInfluence) * 1000) / 10 : 0
+    usedInCalculation: core.includes(x),
+    influencePercent: core.includes(x) && totalInfluence ? Math.round((Math.max(0.01, weightFn(x)) / totalInfluence) * 1000) / 10 : 0
   }));
 
   return {
@@ -434,7 +465,9 @@ async function findComparables(subject, realtyType, geo) {
     months: usedStage.months,
     medianPpsm,
     weightedPpsm,
+    weightedMedianPpsm,
     estimatedValue,
+    calculationTotal: core.length,
     dispersion,
     p25,
     p75,
@@ -542,7 +575,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.3.0", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.4.0", apiKeyConfigured: Boolean(API_KEY) });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -618,7 +651,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceScore({ valuation, comparables, cityPrice, districtPrice, listings });
 
     const result = {
-      version: "5.3.0",
+      version: "5.4.0",
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -671,7 +704,7 @@ app.post("/api/analyze", async (req, res) => {
         averageComparableScore: Math.round(comparables.averageScore),
         atypicalComparables: comparables.atypicalCount,
         dispersion: comparables.dispersion,
-        note: `Les ventes DVF sont classées selon la proximité, la récence, la surface et la similarité du bien. ${comparables.foundTotal} transaction(s) ont été trouvée(s) et ${comparables.retainedTotal} comparable(s) ont été retenu(s) pour le calcul. Chaque vente reçoit un score de pertinence sur 100 et un poids d'influence. Les valeurs atypiques sont soit écartées statistiquement, soit pénalisées dans leur influence lorsqu'elles restent utiles. La recherche s'élargit automatiquement seulement si nécessaire.`
+        note: `Les ventes DVF sont classées selon la proximité, la récence, la surface et la similarité du bien. ${comparables.foundTotal} transaction(s) ont été trouvée(s), ${comparables.retainedTotal} comparable(s) sont affiché(s) et ${comparables.calculationTotal} sont utilisées dans le calcul principal. Le prix central repose sur une médiane pondérée, complétée par une moyenne pondérée, avec une pénalisation robuste des valeurs atypiques. La recherche s'élargit automatiquement seulement si nécessaire.`
       },
       signals: final.signals
     };
