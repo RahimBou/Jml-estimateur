@@ -14,7 +14,11 @@ const API_KEY = process.env.IMMO_DATA_API_KEY;
 const IMMO_BASE = "https://api.immo-data.fr";
 
 app.use(express.json({ limit: "100kb" }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { etag: false, lastModified: false, maxAge: 0 }));
+app.get("/", (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 function cleanNumber(value, fallback = 0) {
   const n = Number(value);
@@ -301,12 +305,10 @@ async function findComparables(subject, realtyType) {
     latitude: subject.latitude, longitude: subject.longitude, radius: 3000,
     txType: "sales", realtyType,
     dateMin: isoDateMonthsAgo(24), dateMax: new Date().toISOString().slice(0, 10),
-    livingAreaMin: Math.max(20, Math.round(subject.livingArea * 0.75)),
-    livingAreaMax: Math.round(subject.livingArea * 1.25),
-    minRoom: subject.rooms ? Math.max(1, subject.rooms - 1) : undefined,
-    maxRoom: subject.rooms ? subject.rooms + 1 : undefined,
-    landAreaMin: subject.landArea > 0 ? Math.max(1, Math.round(subject.landArea * 0.5)) : undefined,
-    landAreaMax: subject.landArea > 0 ? Math.round(subject.landArea * 1.5) : undefined,
+    // Requête volontairement large : les critères terrain/pièces sont appliqués
+    // localement afin d'éviter d'exclure des ventes utiles avant le classement.
+    livingAreaMin: Math.max(20, Math.round(subject.livingArea * 0.60)),
+    livingAreaMax: Math.round(subject.livingArea * 1.40),
     size: 100, sortBy: "date", sortOrder: "desc"
   };
 
@@ -439,7 +441,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.4.1", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.4.2", apiKeyConfigured: Boolean(API_KEY) });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -481,33 +483,34 @@ app.post("/api/analyze", async (req, res) => {
       bathrooms: subject.bathrooms || 0,
       landArea: subject.landArea || 0,
       constructionYear: subject.constructionYear || 0,
-      dpe: subject.dpe,
+      ...(subject.dpe ? { dpe: subject.dpe } : {}),
       condition: ({
         excellent: 1,
         very_good: 1,
         good: 0,
         refresh: -1,
         major_work: -1
-      })[subject.condition] ?? -1,
+      })[subject.condition] ?? 0,
       parking: subject.parking,
       garage: subject.garage,
       cellar: subject.cellar,
       niceView: subject.niceView,
       patio: subject.patio,
       terrace: subject.terrace
-    }).catch(() => null);
+    }).then(value => ({ value, error: null })).catch(error => ({ value: null, error: { status: error.status || null, message: error.message || "Erreur valuation" } }));
 
     // V5.4.1 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
     // Les annonces et le prix commune sont désactivés par défaut pour éviter d'épuiser le solde.
     const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType);
 
-    const [valuation, districtPrice, comparables] = await Promise.all([
+    const [valuationResult, districtPrice, comparables] = await Promise.all([
       valuationPromise,
       districtPromise,
       findComparables(subject, subject.realtyType)
     ]);
 
+    const valuation = valuationResult.value;
     const cityPrice = null;
     const listings = null;
     const confidenceDetails = confidenceScore({ valuation, comparables, cityPrice, districtPrice, listings, subject });
@@ -515,7 +518,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.4.1",
+      version: "5.4.2",
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -565,7 +568,10 @@ app.post("/api/analyze", async (req, res) => {
         analyzedTransactions: comparables.analyzedCount || comparables.foundCount || 0,
         retainedComparables: comparables.total || 0,
         reliability: confidenceDetails,
-        apiWarning: comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
+        apiWarning: [
+          comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
+          valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}.` : null
+        ].filter(Boolean).join(" ") || null,
         note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les annonces et la commune sont désactivées par défaut. Le classement des comparables est réalisé localement."
       },
       api: { maxCallsPerAnalysis: 4, cachedResponses: API_CACHE.size, transactionsUnavailable: Boolean(comparables.unavailable), listingsEnabled: false, cityPriceEnabled: false },
@@ -580,5 +586,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.4.1 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.4.2 sur http://localhost:${PORT}`);
 });
