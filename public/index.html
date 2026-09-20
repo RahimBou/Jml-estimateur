@@ -3,38 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V6</title>
+<title>JML Immobilier — Estimateur V5</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--brand);color:#fff;padding:20px 16px}header .wrap{max-width:980px;margin:auto;display:flex;align-items:center;gap:14px}
-.logo{width:52px;height:52px;border:2px solid #fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900}
-.title{font-size:20px;font-weight:900}.sub{font-size:13px;opacity:.85;margin-top:4px}
-main{max-width:980px;margin:22px auto;padding:0 14px}.card{background:var(--paper);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 18px #0000000a;border:1px solid #e8edf2}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
-h2{font-size:18px;margin:0 0 16px}.hint{color:var(--muted);font-size:13px;line-height:1.45}
-.note{background:var(--soft);border-left:4px solid var(--brand);padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
-.lock{background:var(--warn);border-left:4px solid #c28a00;padding:12px 14px;border-radius:8px;font-size:13px;margin-top:16px}
-label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}
-input,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff}
-input:focus,select:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
+header{background:var(--brand);color:#fff;padding:20px 16px}header .wrap{max-width:980px;margin:auto;display:flex;align-items:center;gap:14px}.logo{width:52px;height:52px;border:2px solid #fff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900}.title{font-size:20px;font-weight:900}.sub{font-size:13px;opacity:.85;margin-top:4px}
+main{max-width:980px;margin:22px auto;padding:0 14px}.card{background:var(--paper);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 3px 18px #0000000a;border:1px solid #e8edf2}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
+h2{font-size:18px;margin:0 0 16px}.hint{color:var(--muted);font-size:13px;line-height:1.45}.note{background:var(--soft);border-left:4px solid var(--brand);padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}.lock{background:var(--warn);border-left:4px solid #c28a00;padding:12px 14px;border-radius:8px;font-size:13px;margin-top:16px}
+label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff}input:focus,select:focus,textarea:focus{outline:2px solid #bfd8ca;border-color:var(--brand)}
 .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.check{border:1px solid var(--line);padding:10px;border-radius:9px;display:flex;gap:8px;align-items:center;font-size:13px}.check input{width:auto}
-button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}
-button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}
-.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
-.result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}
-.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}
-.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
-.sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}
-.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
+button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(--brand);color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-top:16px}button:disabled{opacity:.55;cursor:wait}
+.error{background:var(--danger);color:#8b1e1e;border:1px solid #f1bcbc;border-radius:9px;padding:12px;margin-top:14px}.loading{display:none;background:#eef4ff;padding:12px;border-radius:9px;margin-top:14px}
+.result{display:none}.hero{text-align:center;padding:24px}.price{font-size:42px;font-weight:900;letter-spacing:-1px;margin:8px 0}.range{font-size:16px;color:var(--muted)}.confidence{display:inline-block;margin-top:12px;padding:8px 12px;border-radius:999px;background:var(--soft);font-weight:800}.confidenceDetail{margin-top:8px;color:var(--muted);font-size:13px}.reliability{display:grid;gap:10px}.relRow{border:1px solid var(--line);border-radius:10px;padding:11px}.relTop{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:800}.relMeta{font-size:12px;color:var(--muted);margin-top:4px}.relBar{height:6px;background:#e8edf2;border-radius:99px;overflow:hidden;margin-top:8px}.relBar i{display:block;height:100%;background:var(--brand)}.relSummary{background:var(--soft);border-radius:10px;padding:12px;font-size:13px;line-height:1.5}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.fact{border:1px solid var(--line);border-radius:10px;padding:12px}.fact b{display:block;font-size:18px;margin-bottom:4px}.fact span{font-size:12px;color:var(--muted)}
+.sources{display:grid;gap:10px}.source{border:1px solid var(--line);border-radius:10px;padding:12px}.source .top{display:flex;justify-content:space-between;gap:10px}.source b{font-size:14px}.bar{height:7px;border-radius:99px;background:#e8edf2;margin-top:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
 .tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
 .compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V6 — analyse multi-sources et ventes comparables</div></div></div></header>
-
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.1 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
@@ -67,272 +55,83 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </div>
 </div>
 
-<div class="note">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne peut donc pas influencer le calcul.</div>
+<div class="note">🔒 Le prix souhaité par le propriétaire n'est volontairement pas demandé avant l'analyse. Il ne pourra donc pas influencer le calcul.</div>
 <button id="submit" type="submit">ANALYSER LE BIEN</button>
-<div id="loading" class="loading">⏳ Analyse en cours…</div>
+<div id="loading" class="loading">⏳ Analyse en cours : géocodage, estimation, quartier et ventes DVF comparables…</div>
 <div id="error"></div>
 </form>
 
 <section id="result" class="result">
-<div class="card hero">
-<div class="hint">Estimation JML multi-sources</div>
-<div id="main" class="price">—</div>
-<div id="range" class="range">—</div>
-<div id="confidence" class="confidence">Fiabilité : —/5</div>
-<div class="facts">
-<div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div>
-<div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div>
-<div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div>
-</div>
-</div>
+<div class="card hero"><div class="hint">Estimation JML multi-sources</div><div id="main" class="price">—</div><div id="range" class="range">—</div><div id="confidence" class="confidence">Fiabilité : —/5</div>
+<div class="facts"><div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div><div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div><div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div></div></div>
 
-<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p></div>
+<div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><p id="method" class="footer-note"></p><p class="footer-note">🆓 MODE GRATUIT : aucune requête Immo Data n’est effectuée et aucun crédit n’est consommé. Les données sont simulées localement pour tester le moteur. · 💡 V5.5.1 : chaque source reçoit un score de qualité indépendant ; son poids est ensuite ajusté selon son accord avec le consensus robuste. Ce n’est pas une moyenne fixe.</p></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+<div class="card" id="reliabilityCard"><h2>🎯 Fiabilité de l'estimation</h2><div id="reliabilitySummary" class="relSummary">Analyse de fiabilité en cours…</div><div id="reliability" class="reliability" style="margin-top:12px"></div></div>
 
-<div class="card">
-<h2>🔒 Maintenant, parlons de votre prix</h2>
-<p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p>
-<button id="showCompare" type="button">SAISIR LE PRIX ENVISAGÉ</button>
-<div id="compare" class="compare">
-<input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000">
-<button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button>
-<div id="comparison" class="comparison"></div>
-</div>
-</div>
+<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><p id="filterInfo" class="hint" style="display:none"></p><p id="apiWarning" class="hint" style="display:none"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+
+<div class="card"><h2>🔒 Maintenant, parlons de votre prix</h2><p class="hint">L'estimation a été calculée avant de connaître votre prix. Vous pouvez maintenant indiquer le prix que vous aviez en tête.</p><button id="showCompare">SAISIR LE PRIX ENVISAGÉ</button><div id="compare" class="compare"><input id="ownerPrice" type="number" min="0" placeholder="Ex. 250000"><button id="compareBtn" type="button">COMPARER À L'ESTIMATION</button><div id="comparison" class="comparison"></div></div></div>
 </section>
 </main>
-
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  'use strict';
+const euro = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(n)||0);
+let estimateValue = 0;
+const $ = id => document.getElementById(id);
 
-  const $ = id => document.getElementById(id);
-  const euro = n => new Intl.NumberFormat('fr-FR',{
-    style:'currency',currency:'EUR',maximumFractionDigits:0
-  }).format(Number(n)||0);
-
-  const form = $('form');
-  const errorBox = $('error');
-  const loading = $('loading');
-  const submit = $('submit');
-  const result = $('result');
-
-  // Sécurité : aucune écriture dans innerHTML.
-  // Tous les éléments sont vérifiés avant utilisation.
-  const requiredIds = [
-    'form','error','loading','submit','result','main','range','confidence',
-    'ppsm','txCount','window','sources','method','selection','txBody',
-    'showCompare','compare','ownerPrice','compareBtn','comparison',
-    'address','realtyType','livingArea','landArea','rooms','bathrooms',
-    'constructionYear','dpe','condition','garage','parking','cellar',
-    'terrace','patio','niceView'
-  ];
-
-  const missing = requiredIds.filter(id => !$(id));
-  if (missing.length) {
-    console.error('JML Estimateur : éléments HTML manquants :', missing);
-    if (errorBox) {
-      errorBox.textContent = 'Erreur de chargement de l’interface. Éléments manquants : ' + missing.join(', ');
-      errorBox.className = 'error';
-    }
-    return;
-  }
-
-  let estimateValue = 0;
-
-  function clear(node) {
-    while (node.firstChild) node.removeChild(node.firstChild);
-  }
-
-  function showError(message) {
-    errorBox.textContent = String(message || 'Erreur inconnue');
-    errorBox.className = 'error';
-  }
-
-  function setText(id, value) {
-    const node = $(id);
-    if (node) node.textContent = value == null ? '—' : String(value);
-  }
-
-  function appendCell(row, value) {
-    const td = document.createElement('td');
-    td.textContent = value == null ? '' : String(value);
-    row.appendChild(td);
-  }
-
-  function renderSources(signals) {
-    const container = $('sources');
-    clear(container);
-
-    if (!Array.isArray(signals) || !signals.length) {
-      const p = document.createElement('p');
-      p.className = 'hint';
-      p.textContent = 'Aucune source exploitable.';
-      container.appendChild(p);
-      return;
-    }
-
-    signals.forEach(s => {
-      const box = document.createElement('div');
-      box.className = 'source';
-
-      const top = document.createElement('div');
-      top.className = 'top';
-
-      const name = document.createElement('b');
-      name.textContent = s.name || 'Source';
-
-      const value = document.createElement('strong');
-      value.textContent = euro(s.value);
-
-      top.append(name, value);
-
-      const bar = document.createElement('div');
-      bar.className = 'bar';
-
-      const fill = document.createElement('i');
-      const weight = Math.max(3, Math.min(100, Number(s.weight) || 0));
-      fill.style.width = weight + '%';
-      bar.appendChild(fill);
-
-      const hint = document.createElement('div');
-      hint.className = 'hint';
-      hint.textContent = 'Poids dans le calcul : ' + (Number(s.weight)||0) + '%';
-
-      box.append(top, bar, hint);
-      container.appendChild(box);
-    });
-  }
-
-  function renderTransactions(data) {
-    const body = $('txBody');
-    clear(body);
-
-    const rows = Array.isArray(data) ? data : [];
-
-    if (!rows.length) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 6;
-      td.textContent = 'Aucune vente comparable exploitable dans la fenêtre retenue.';
-      tr.appendChild(td);
-      body.appendChild(tr);
-      return;
-    }
-
-    rows.forEach(x => {
-      const tr = document.createElement('tr');
-      appendCell(tr, x.date || '');
-      appendCell(tr, ((x.streetName || '') + ' ' + (x.streetNumber || '')).trim());
-      appendCell(tr, Number.isFinite(Number(x.livingArea)) ? Math.round(Number(x.livingArea)) + ' m²' : '—');
-      appendCell(tr, euro(x.price));
-      appendCell(tr, euro(x.sqmPrice));
-      appendCell(tr, x.distanceKm == null ? '—' : Number(x.distanceKm).toFixed(2) + ' km');
-      body.appendChild(tr);
-    });
-  }
-
-  function render(d) {
-    if (!d || !d.estimate) throw new Error('Réponse serveur incomplète : estimate absent.');
-
-    estimateValue = Number(d.estimate.main) || 0;
-
-    setText('main', euro(d.estimate.main));
-    setText('range', 'Fourchette indicative : ' + euro(d.estimate.low) + ' → ' + euro(d.estimate.high));
-    setText('confidence', 'Fiabilité : ' + (d.estimate.confidence ?? '—') + '/5');
-    setText('ppsm', euro(d.estimate.pricePerSqm));
-
-    const comparables = d.sources && d.sources.comparables ? d.sources.comparables : {};
-    setText('txCount', String(comparables.total || 0));
-    setText('window', d.method && d.method.comparableWindow ? d.method.comparableWindow : '—');
-    setText('selection',
-      (d.method && d.method.comparableSelection ? d.method.comparableSelection : 'Sélection locale') +
-      ' · rayon ' + (comparables.radiusMeters || (d.method && d.method.comparableRadius) || '—')
-    );
-    setText('method', d.method && d.method.note ? d.method.note : '');
-
-    renderSources(Array.isArray(d.signals) ? d.signals : []);
-    renderTransactions(comparables.data);
-
-    result.style.display = 'block';
-    result.scrollIntoView({behavior:'smooth'});
-  }
-
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-
-    errorBox.textContent = '';
-    errorBox.className = '';
-    loading.style.display = 'block';
-    submit.disabled = true;
-
-    const payload = {
-      address: $('address').value.trim(),
-      realtyType: $('realtyType').value,
-      livingArea: Number($('livingArea').value),
-      landArea: Number($('landArea').value || 0),
-      rooms: Number($('rooms').value || 0),
-      bathrooms: Number($('bathrooms').value || 0),
-      constructionYear: Number($('constructionYear').value || 0),
-      dpe: $('dpe').value,
-      condition: $('condition').value,
-      garage: $('garage').checked,
-      parking: $('parking').checked,
-      cellar: $('cellar').checked,
-      terrace: $('terrace').checked,
-      patio: $('patio').checked,
-      niceView: $('niceView').checked
-    };
-
-    try {
-      if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
-      if (!Number.isFinite(payload.livingArea) || payload.livingArea < 10) {
-        throw new Error('La surface habitable doit être renseignée.');
-      }
-
-      const response = await fetch('/api/analyze', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        cache:'no-store',
-        body:JSON.stringify(payload)
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Erreur pendant l’analyse.');
-
-      render(data);
-    } catch (err) {
-      console.error('JML Estimateur analyse:', err);
-      showError(err && err.message ? err.message : 'Erreur inconnue.');
-    } finally {
-      loading.style.display = 'none';
-      submit.disabled = false;
-    }
-  });
-
-  $('showCompare').addEventListener('click', () => {
-    $('compare').style.display = 'block';
-    $('showCompare').style.display = 'none';
-    $('ownerPrice').focus();
-  });
-
-  $('compareBtn').addEventListener('click', () => {
-    const owner = Number($('ownerPrice').value || 0);
-    if (!owner || !estimateValue) return;
-
-    const diff = owner - estimateValue;
-    const pct = diff / estimateValue * 100;
-
-    $('comparison').textContent =
-      'Estimation JML : ' + euro(estimateValue) +
-      '\\nPrix envisagé : ' + euro(owner) +
-      '\\nÉcart : ' + (diff >= 0 ? '+' : '') + euro(diff) +
-      ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + ' %)';
-
-    $('comparison').style.whiteSpace = 'pre-line';
-  });
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('error').innerHTML=''; $('loading').style.display='block'; $('submit').disabled=true;
+  const payload={
+    address:$('address').value.trim(), realtyType:$('realtyType').value,
+    livingArea:Number($('livingArea').value), landArea:Number($('landArea').value||0), rooms:Number($('rooms').value||0),
+    bathrooms:Number($('bathrooms').value||0), constructionYear:Number($('constructionYear').value||0), dpe:$('dpe').value,
+    condition:$('condition').value, garage:$('garage').checked, parking:$('parking').checked, cellar:$('cellar').checked,
+    terrace:$('terrace').checked, patio:$('patio').checked, niceView:$('niceView').checked
+  };
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await r.json(); if(!r.ok) throw new Error(data.error||'Erreur pendant l’analyse');
+    render(data);
+  }catch(err){ $('error').innerHTML='<div class="error">'+escapeHtml(err.message)+'</div>'; }
+  finally{ $('loading').style.display='none'; $('submit').disabled=false; }
 });
+
+function render(d){
+  estimateValue=d.estimate.main;
+  $('main').textContent=euro(d.estimate.main);
+  $('range').textContent='Fourchette indicative : '+euro(d.estimate.low)+' → '+euro(d.estimate.high);
+  $('confidence').textContent='Fiabilité : '+d.estimate.confidence+'/5';
+  const rel=d.method.reliability||{};
+  $('reliabilitySummary').innerHTML='<b>'+escapeHtml(d.estimate.confidenceLabel||'—')+'</b> · score '+(d.estimate.confidenceScore??'—')+'/100. La fourchette tient compte de la dispersion des ventes et de l\'accord entre les sources.';
+  $('reliability').innerHTML=(rel.factors||[]).map(f=>`<div class="relRow"><div class="relTop"><span>${escapeHtml(f.label)}</span><span>${f.score}/${f.max}</span></div><div class="relMeta">${escapeHtml(f.detail)}</div><div class="relBar"><i style="width:${Math.max(0,Math.min(100,(f.score/f.max)*100))}%"></i></div></div>`).join('');
+  $('ppsm').textContent=euro(d.estimate.pricePerSqm);
+  $('txCount').textContent=String(d.sources.comparables.total||0);
+  $('window').textContent=d.method.comparableWindow;
+  $('selection').textContent=(d.method.foundTransactions||0)+' transaction(s) trouvée(s) · '+(d.method.analyzedTransactions||0)+' après filtrage · '+(d.method.retainedComparables||0)+' retenue(s) · '+d.method.comparableSelection+' · rayon '+d.sources.comparables.radiusMeters+' m'; if(d.method.filterReason){ $('filterInfo').style.display='block'; $('filterInfo').textContent='🔎 '+d.method.filterReason+'.'; } else { $('filterInfo').style.display='none'; } if(d.method.apiWarning){ $('apiWarning').style.display='block'; $('apiWarning').textContent='⚠️ '+d.method.apiWarning+' L’estimation continue avec les autres sources disponibles.'; } else { $('apiWarning').style.display='none'; }
+  $('method').textContent=d.method.note;
+  if(d.api){ $('method').textContent += d.api.freeMode ? ' · 🆓 0 appel API payant.' : ' · Plafond : '+d.api.maxCallsPerAnalysis+' appels/analyse.'; }
+  const sourceRows=d.signals||[];
+  $('sources').innerHTML=sourceRows.map(s=>`<div class="source"><div class="top"><b>${escapeHtml(s.name)}</b><strong>${euro(s.value)}</strong></div><div class="bar"><i style="width:${Math.max(3,Math.min(100,s.weight))}%"></i></div><div class="hint">Poids réel : <b>${s.weight}%</b> · Qualité : <b>${s.quality ?? '—'}/100</b> · Accord : <b>${s.agreement ?? '—'}%</b></div><div class="hint">${escapeHtml(s.reason||'')} · écart au consensus : ${s.deviationPct ?? 0}%</div></div>`).join('');
+  const tx=d.sources.comparables.data||[];
+  $('txBody').innerHTML=tx.length?tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml((x.streetName||'')+' '+(x.streetNumber||''))}</td><td>${Math.round(x.livingArea)} m²</td><td>${euro(x.price)}</td><td>${euro(x.sqmPrice)}</td><td>${x.distanceKm==null?'—':x.distanceKm.toFixed(2)+' km'}</td><td>${Number.isFinite(x.score)?x.score+'/100':'—'}</td><td>${Number.isFinite(x.influence)?x.influence.toFixed(1)+' %':'—'}</td></tr>`).join(''):'<tr><td colspan="8">Aucune vente comparable exploitable dans la fenêtre retenue. La fiabilité liée aux ventes est donc réduite ; les autres sources restent affichées séparément.</td></tr>';
+  $('result').style.display='block'; $('result').scrollIntoView({behavior:'smooth'});
+}
+
+$('showCompare').onclick=()=>{ $('compare').style.display='block'; $('showCompare').style.display='none'; $('ownerPrice').focus(); };
+$('compareBtn').onclick=()=>{
+  const owner=Number($('ownerPrice').value||0); if(!owner) return;
+  const diff=owner-estimateValue; const pct=estimateValue?diff/estimateValue*100:0;
+  $('comparison').innerHTML='<b>Estimation JML :</b> '+euro(estimateValue)+'<br><b>Prix envisagé :</b> '+euro(owner)+'<br><b>Écart :</b> '+(diff>=0?'+':'')+euro(diff)+' ('+(pct>=0?'+':'')+pct.toFixed(1)+' %)';
+};
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+
+// Nettoyage défensif : évite l'affichage de anciens blocs/échappements issus d'un cache.
+(function(){
+  document.querySelectorAll('body *').forEach(el=>{
+    if(el.childNodes.length===1 && el.firstChild.nodeType===3 && /^(\s*\\n)+\s*$/.test(el.textContent)) el.remove();
+  });
+})();
 </script>
 </body>
 </html>
