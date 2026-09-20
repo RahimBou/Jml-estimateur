@@ -1,8 +1,10 @@
 {
-  "name": "jml-estimateur-v5",
-  "version": "5.5.1",
+  "name": "jml-estimateur-web",
+  "version": "6.2.0",
   "private": true,
-  "description": "Estimateur immobilier JML — V5.5.1 mode gratuit permanent, sans appels API payants",
+  "description": "JML Estimateur Immobilier - version web hébergeable",
+  "main": "server.js",
   "scripts": {"start": "node server.js"},
   "engines": {"node": ">=18"},
   "dependencies": {"express": "^4.21.2"}
+}
