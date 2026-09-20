@@ -428,79 +428,73 @@ function weightedMedian(items, valueFn, weightFn) {
 }
 
 
-function featureAdjustment(subject) {
-  // MODE GRATUIT : ajustements locaux indicatifs uniquement.
-  // Ils servent à faire varier les données simulées selon les caractéristiques saisies.
-  // Lorsqu'une vraie source déjà ajustée par ces caractéristiques sera branchée,
-  // ces coefficients devront être désactivés pour éviter un double comptage.
-  let pct = 0;
+function featureAdjustmentDetails(subject) {
+  const items = [];
   const type = subject.realtyType;
   const area = Number(subject.livingArea || 0);
+  const add = (label, pct, detail) => { if (pct) items.push({ label, pct: Math.round(pct * 100), detail }); };
 
-  // Effet de taille sur le prix au m² (effet de structure, pas une règle universelle).
   if (area > 0) {
-    if (area < 50) pct += 0.08;
-    else if (area < 80) pct += 0.04;
-    else if (area > 180) pct -= 0.08;
-    else if (area > 120) pct -= 0.04;
+    if (area < 50) add('Petite surface', 0.08, 'surface < 50 m²');
+    else if (area < 80) add('Surface compacte', 0.04, 'surface 50–79 m²');
+    else if (area > 180) add('Grande surface', -0.08, 'surface > 180 m²');
+    else if (area > 120) add('Grande surface', -0.04, 'surface 121–180 m²');
   }
 
-  if (type === "house" || type === "apartment" || type === "multiple") {
+  if (type === 'house' || type === 'apartment' || type === 'multiple') {
     const dpeAdj = { A: 0.06, B: 0.04, C: 0.02, D: 0, E: -0.03, F: -0.06, G: -0.09 };
-    pct += dpeAdj[subject.dpe] || 0;
+    add('DPE', dpeAdj[subject.dpe] || 0, subject.dpe ? `classe ${subject.dpe}` : 'non renseigné');
     const gesAdj = { A: 0.02, B: 0.015, C: 0.01, D: 0, E: -0.01, F: -0.02, G: -0.03 };
-    pct += gesAdj[subject.ges] || 0;
-
-    const conditionAdj = {
-      excellent: 0.06,
-      very_good: 0.04,
-      good: 0.02,
-      refresh: -0.04,
-      major_work: -0.10
-    };
-    pct += conditionAdj[subject.condition] || 0;
-
-    if (subject.constructionYear >= 2015) pct += 0.03;
-    else if (subject.constructionYear >= 2000) pct += 0.015;
-    else if (subject.constructionYear > 0 && subject.constructionYear < 1950) pct -= 0.025;
-
-    if (subject.bathrooms >= 2) pct += 0.015;
-    if (subject.bathrooms >= 3) pct += 0.01;
+    add('GES', gesAdj[subject.ges] || 0, subject.ges ? `classe ${subject.ges}` : 'non renseigné');
+    const conditionAdj = { excellent: 0.06, very_good: 0.04, good: 0.02, refresh: -0.04, major_work: -0.10 };
+    add('État général', conditionAdj[subject.condition] || 0, subject.condition || 'non renseigné');
+    if (subject.constructionYear >= 2015) add('Construction récente', 0.03, `année ${subject.constructionYear}`);
+    else if (subject.constructionYear >= 2000) add('Construction récente', 0.015, `année ${subject.constructionYear}`);
+    else if (subject.constructionYear > 0 && subject.constructionYear < 1950) add('Construction ancienne', -0.025, `année ${subject.constructionYear}`);
+    if (subject.bathrooms >= 2) add('Salles de bains', 0.015, `${subject.bathrooms} salles d'eau/bains`);
+    if (subject.bathrooms >= 3) add('Salles de bains supplémentaires', 0.01, `${subject.bathrooms} salles d'eau/bains`);
+    if (subject.bedrooms >= 4) add('Chambres', 0.02, `${subject.bedrooms} chambres`);
+    else if (subject.bedrooms >= 3) add('Chambres', 0.01, `${subject.bedrooms} chambres`);
   }
-
-  if (type === "house" || type === "multiple") {
+  if (type === 'house' || type === 'multiple') {
     if (subject.landArea > 0) {
-      if (subject.landArea >= 1000) pct += 0.05;
-      else if (subject.landArea >= 500) pct += 0.025;
-      else if (subject.landArea < 150) pct -= 0.02;
+      if (subject.landArea >= 1000) add('Grand terrain', 0.05, `${subject.landArea} m²`);
+      else if (subject.landArea >= 500) add('Terrain', 0.025, `${subject.landArea} m²`);
+      else if (subject.landArea < 150) add('Petit terrain', -0.02, `${subject.landArea} m²`);
     }
-    if (subject.pool) pct += 0.03;
+    if (subject.pool) add('Piscine', 0.03, 'présente');
   }
-
-  if (type === "apartment") {
-    if (subject.elevator) pct += 0.02;
-    if (subject.floor === 0) pct -= 0.03;
-    else if (subject.floor >= 4) pct += subject.elevator ? 0.02 : -0.02;
-    if (subject.level >= 5 && subject.floor >= 4 && !subject.elevator) pct -= 0.02;
+  if (type === 'apartment') {
+    if (subject.elevator) add('Ascenseur', 0.02, 'présent');
+    if (subject.floor === 0) add('Rez-de-chaussée', -0.03, 'RDC');
+    else if (subject.floor >= 4) add('Étage élevé', subject.elevator ? 0.02 : -0.02, `${subject.floor}e étage`);
+    if (subject.level >= 5 && subject.floor >= 4 && !subject.elevator) add('Sans ascenseur', -0.02, 'étage élevé');
   }
+  if (subject.garage) add('Garage', 0.03, 'présent');
+  if (subject.parking) add('Parking', 0.02, 'présent');
+  if (subject.cellar) add('Cave', 0.01, 'présente');
+  if (subject.terrace) add('Terrasse', 0.02, 'présente');
+  if (subject.patio) add('Cour / patio', 0.02, 'présent');
+  if (subject.niceView) add('Vue', 0.02, 'belle vue');
 
-  if (subject.garage) pct += 0.03;
-  if (subject.parking) pct += 0.02;
-  if (subject.cellar) pct += 0.01;
-  if (subject.terrace || subject.patio) pct += 0.02;
-  if (subject.niceView) pct += 0.02;
+  const rawPct = items.reduce((sum, x) => sum + x.pct, 0);
+  const factor = clamp(1 + rawPct / 100, 0.78, 1.18);
+  const appliedPct = Math.round((factor - 1) * 100);
+  return { items, rawPct, appliedPct, factor };
+}
 
-  return clamp(1 + pct, 0.78, 1.18);
+function featureAdjustment(subject) {
+  return featureAdjustmentDetails(subject).factor;
 }
 
 function applyFreeModeFeatureAdjustment(sources, subject) {
   if (!FREE_MODE) return sources;
-  const factor = featureAdjustment(subject);
+  const details = featureAdjustmentDetails(subject);
   return sources.map(source => ({
     ...source,
-    ppsm: source.ppsm * factor,
-    value: source.value * factor,
-    featureAdjustmentPct: Math.round((factor - 1) * 100)
+    ppsm: source.ppsm * details.factor,
+    value: source.value * details.factor,
+    featureAdjustmentPct: details.appliedPct
   }));
 }
 
@@ -705,7 +699,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.5.3", freeMode: FREE_MODE, paidApiDisabled: FREE_MODE, apiKeyConfigured: false, mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "5.5.5", freeMode: FREE_MODE, paidApiDisabled: FREE_MODE, apiKeyConfigured: false, mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -809,7 +803,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.5.3",
+      version: "5.5.5",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -834,7 +828,7 @@ app.post("/api/analyze", async (req, res) => {
         floor: subject.floor,
         condition: subject.condition,
         features: { parking: subject.parking, garage: subject.garage, cellar: subject.cellar, terrace: subject.terrace, patio: subject.patio, niceView: subject.niceView, elevator: subject.elevator, pool: subject.pool },
-        freeModeFeatureAdjustmentPct: Math.round((featureAdjustment(subject) - 1) * 100)
+        freeModeFeatureAdjustmentPct: featureAdjustmentDetails(subject).appliedPct, featureAdjustmentDetails: featureAdjustmentDetails(subject).items
       },
       estimate: {
         main: final.main,
@@ -871,7 +865,8 @@ app.post("/api/analyze", async (req, res) => {
         consensusPpsm: final.consensusPpsm,
         filterMode: comparables.filterMode || null,
         filterReason: comparables.filterReason || null,
-        featureAdjustmentPct: Math.round((featureAdjustment(subject) - 1) * 100),
+        featureAdjustmentPct: featureAdjustmentDetails(subject).appliedPct,
+        featureAdjustmentDetails: featureAdjustmentDetails(subject).items,
         sourceQuality: final.signals.map(s => ({ key: s.key, name: s.name, quality: s.quality, agreement: s.agreement, deviationPct: s.deviationPct, reason: s.reason })),
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
@@ -892,5 +887,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.5.4 — MODE GRATUIT PERMANENT — http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.5.5 — MODE GRATUIT PERMANENT — http://localhost:${PORT}`);
 });
