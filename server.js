@@ -11,6 +11,9 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.IMMO_DATA_API_KEY;
+const MOCK_API_MODE = /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE || ""));
+const COMPARABLE_MIN_PPSM = Math.max(0, cleanNumber(process.env.COMPARABLE_MIN_PPSM, 400));
+const COMPARABLE_ROBUST_MULT = Math.max(0.5, cleanNumber(process.env.COMPARABLE_ROBUST_MULT, 1.5));
 const IMMO_BASE = "https://api.immo-data.fr";
 
 app.use(express.json({ limit: "100kb" }));
@@ -105,15 +108,24 @@ function normalizeTransactions(raw, subject) {
 }
 
 function robustFilter(transactions) {
-  if (transactions.length < 4) return transactions;
+  if (transactions.length < 4) return { items: transactions, mode: "insufficient-volume", reason: "moins de 4 ventes exploitables : aucun filtre statistique agressif appliqué" };
   const prices = transactions.map(x => x.sqmPrice);
   const q1 = percentile(prices, 0.25);
   const q3 = percentile(prices, 0.75);
   const iqr = q3 - q1;
-  if (!Number.isFinite(iqr) || iqr <= 0) return transactions;
-  const low = Math.max(400, q1 - 1.5 * iqr);
-  const high = q3 + 1.5 * iqr;
-  return transactions.filter(x => x.sqmPrice >= low && x.sqmPrice <= high);
+  if (!Number.isFinite(iqr) || iqr <= 0) return { items: transactions, mode: "no-dispersion", reason: "dispersion statistique non exploitable : toutes les ventes conservées" };
+
+  const low = Math.max(COMPARABLE_MIN_PPSM, q1 - COMPARABLE_ROBUST_MULT * iqr);
+  const high = q3 + COMPARABLE_ROBUST_MULT * iqr;
+  const strict = transactions.filter(x => x.sqmPrice >= low && x.sqmPrice <= high);
+  if (strict.length >= 3) return { items: strict, mode: "iqr", reason: `${strict.length} ventes conservées après filtre IQR et seuil ${Math.round(COMPARABLE_MIN_PPSM)} €/m²` };
+
+  // Fallback local, sans nouvel appel API : on évite qu'un marché atypique ou peu fourni
+  // transforme une recherche réussie en "aucun comparable".
+  const iqrOnly = transactions.filter(x => x.sqmPrice >= q1 - COMPARABLE_ROBUST_MULT * iqr && x.sqmPrice <= q3 + COMPARABLE_ROBUST_MULT * iqr);
+  if (iqrOnly.length >= 3) return { items: iqrOnly, mode: "iqr-relaxed", reason: `${iqrOnly.length} ventes conservées après assouplissement du seuil minimum €/m²` };
+
+  return { items: transactions, mode: "all-fallback", reason: `filtre statistique trop restrictif : ${transactions.length} ventes conservées avec avertissement` };
 }
 
 function clamp(value, min, max) {
@@ -190,7 +202,24 @@ function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-async function immo(endpoint, params = {}) {
+function mockResponse(endpoint, params) {
+  if (endpoint === "/v1/geocode") return [{ geoLevel: "address", label: params.q || "Adresse test", longitude: 3.235, latitude: 50.175, cityName: "Cambrai", postCode: "59400", inseeCode: "59122", districtCode: "TEST-DISTRICT", districtName: "Grand quartier test" }];
+  if (endpoint === "/v1/market/price/current") return { value: 1760 };
+  if (endpoint === "/v1/valuation") return { mainValuation: 188000, lowerValuation: 160000, upperValuation: 215000, confidence: 4 };
+  if (endpoint === "/v1/transactions") {
+    const area = Number(params.livingAreaMin || 100) + 10;
+    return { data: Array.from({ length: 18 }, (_, i) => ({ txId: `MOCK-${i+1}`, txDate: isoDateMonthsAgo(Math.max(1, i % 18)), price: (1550 + (i % 6) * 75) * area, squareMeterPrice: 1550 + (i % 6) * 75, attributes: { livingArea: area + (i % 5) - 2, landArea: 300 + i * 12, rooms: 4 }, lot: [{ location: { geometry: { coordinates: [3.235 + i * 0.001, 50.175 + i * 0.001] }, address: { streetName: `Rue test ${i+1}`, streetNumber: `${i+1}` } } }] })) };
+  }
+  return {};
+}
+
+function logEvent(event, details = {}) {
+  const payload = { ts: new Date().toISOString(), service: "jml-estimateur", event, ...details };
+  console.log(JSON.stringify(payload));
+}
+
+async function immo(endpoint, params = {}, requestId = null) {
+  if (MOCK_API_MODE) return cloneJson(mockResponse(endpoint, params));
   if (!API_KEY) throw new Error("Clé API Immo Data absente côté serveur.");
 
   const key = cacheKey(endpoint, params);
@@ -203,10 +232,18 @@ async function immo(endpoint, params = {}) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(paramKey, String(value));
   }
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${API_KEY}`, Accept: "application/json" }
-  });
+  const startedAt = Date.now();
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${API_KEY}`, Accept: "application/json" }
+    });
+  } catch (networkError) {
+    logEvent("api_network_error", { requestId, endpoint, durationMs: Date.now() - startedAt, error: networkError.message });
+    throw networkError;
+  }
   const body = await response.json().catch(() => ({}));
+  logEvent(response.ok ? "api_success" : "api_http_error", { requestId, endpoint, status: response.status, durationMs: Date.now() - startedAt });
   if (!response.ok) {
     const error = new Error(`Immo Data ${response.status}: ${body.message || "erreur API"}`);
     error.status = response.status;
@@ -223,12 +260,12 @@ function isInsufficientBalance(error) {
   return Number(error?.status) === 402 || /Insufficient balance|solde insuffisant|balance/i.test(String(error?.message || ""));
 }
 
-async function geocodeAddress(address) {
+async function geocodeAddress(address, requestId = null) {
   const rows = await immo("/v1/geocode", {
     q: address,
     geoLevel: "address,street,city,district",
     limit: 10
-  });
+  }, requestId);
   const list = Array.isArray(rows) ? rows : (Array.isArray(rows.data) ? rows.data : []);
   if (!list.length) throw new Error("Adresse introuvable. Vérifie l'adresse saisie.");
 
@@ -260,7 +297,7 @@ async function geocodeAddress(address) {
   };
 }
 
-async function marketPrice(code, geoLevel, realtyType) {
+async function marketPrice(code, geoLevel, realtyType, requestId = null) {
   if (!code) return null;
   try {
     return await immo("/v1/market/price/current", {
@@ -269,8 +306,9 @@ async function marketPrice(code, geoLevel, realtyType) {
       marketType: "sales",
       realtyType,
       metric: "sqm_price"
-    });
-  } catch (_) {
+    }, requestId);
+  } catch (error) {
+    logEvent("market_price_error", { endpoint: "/v1/market/price/current", status: error.status || null, error: error.message });
     return null;
   }
 }
@@ -299,7 +337,7 @@ async function listingStats(subject, realtyType, dateMin) {
   }
 }
 
-async function findComparables(subject, realtyType) {
+async function findComparables(subject, realtyType, requestId = null) {
   // V5.4 : une seule requête large. Le classement est ensuite fait localement.
   const query = {
     latitude: subject.latitude, longitude: subject.longitude, radius: 3000,
@@ -313,7 +351,7 @@ async function findComparables(subject, realtyType) {
   };
 
   let raw;
-  try { raw = await immo("/v1/transactions", query); }
+  try { raw = await immo("/v1/transactions", query, requestId); }
   catch (error) {
     return { foundCount: 0, analyzedCount: 0, total: 0, stage: "Transactions indisponibles",
       radiusMeters: 3000, months: 24, medianPpsm: null, weightedPpsm: null, estimatedValue: null,
@@ -322,7 +360,8 @@ async function findComparables(subject, realtyType) {
   }
 
   const normalizedBeforeFilter = normalizeTransactions(raw, subject);
-  const filtered = robustFilter(normalizedBeforeFilter);
+  const filterResult = robustFilter(normalizedBeforeFilter);
+  const filtered = filterResult.items;
   const scored = filtered.map(x => ({ ...x, score: comparableScore(x, subject),
     ageMonths: ageMonthsFromDate(x.date), rawWeight: similarityWeight(x, subject) }));
   scored.sort((a, b) => b.score - a.score || b.rawWeight - a.rawWeight);
@@ -337,7 +376,7 @@ async function findComparables(subject, realtyType) {
 
   return {
     foundCount: normalizedBeforeFilter.length, analyzedCount: filtered.length, total: ranked.length,
-    stage: "Secteur élargi — 24 mois", radiusMeters: 3000, months: 24, medianPpsm, weightedPpsm,
+    stage: "Secteur élargi — 24 mois", radiusMeters: 3000, months: 24, medianPpsm, weightedPpsm, filterMode: filterResult.mode, filterReason: filterResult.reason,
     estimatedValue: effectivePpsm ? effectivePpsm * subject.livingArea : null,
     avgScore: ranked.length ? ranked.reduce((s, x) => s + x.score, 0) / ranked.length : null,
     avgDistanceKm: ranked.length ? ranked.reduce((s, x) => s + (Number.isFinite(x.distanceKm) ? x.distanceKm : 3), 0) / ranked.length : null,
@@ -353,31 +392,164 @@ function listingMedianPpsm(raw) {
   return cleanNumber(p50 || mean, 0) || null;
 }
 
-function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject, confidenceDetails }) {
-  const signals = [];
-  if (comparables?.estimatedValue) signals.push({ name: "Ventes DVF comparables", value: comparables.estimatedValue, weight: comparables.total >= 5 ? 0.50 : comparables.total >= 3 ? 0.42 : 0.28 });
-  if (valuation?.mainValuation) signals.push({ name: "Modèle d'estimation", value: valuation.mainValuation, weight: valuation.confidence >= 4 ? 0.25 : valuation.confidence >= 3 ? 0.20 : 0.15 });
-  if (districtPrice?.value) signals.push({ name: "Prix du grand quartier", value: districtPrice.value * subject.livingArea, weight: 0.12 });
-  if (cityPrice?.value) signals.push({ name: "Prix de la commune", value: cityPrice.value * subject.livingArea, weight: 0.08 });
-  const listPpsm = listingMedianPpsm(listings);
-  if (listPpsm) signals.push({ name: "Annonces actuellement en vente", value: listPpsm * subject.livingArea, weight: 0.05 });
+function weightedMedian(items, valueFn, weightFn) {
+  const rows = items.map(item => ({
+    value: Number(valueFn(item)),
+    weight: Number(weightFn(item))
+  })).filter(x => Number.isFinite(x.value) && x.value > 0 && Number.isFinite(x.weight) && x.weight > 0)
+    .sort((a, b) => a.value - b.value);
+  if (!rows.length) return null;
+  const total = rows.reduce((s, x) => s + x.weight, 0);
+  let acc = 0;
+  for (const row of rows) {
+    acc += row.weight;
+    if (acc >= total / 2) return row.value;
+  }
+  return rows[rows.length - 1].value;
+}
 
-  const totalWeight = signals.reduce((s, x) => s + x.weight, 0);
+function sourceQualityAndValue({ valuation, districtPrice, comparables, subject }) {
+  const out = [];
+
+  if (comparables?.estimatedValue && comparables.total > 0) {
+    const count = comparables.total;
+    const countQ = clamp(count / 15, 0, 1);
+    const similarityQ = clamp((comparables.avgScore || 0) / 100, 0, 1);
+    const distanceQ = comparables.avgDistanceKm == null ? 0.35 : clamp(1 - comparables.avgDistanceKm / 3, 0, 1);
+    const recencyQ = comparables.avgAgeMonths == null ? 0.35 : clamp(1 - comparables.avgAgeMonths / 24, 0, 1);
+    const iqrRatio = comparables.iqrRatio == null ? 0.30 : comparables.iqrRatio;
+    const dispersionQ = clamp(1 - iqrRatio / 0.45, 0.05, 1);
+
+    // Les ventes réelles partent avec un avantage méthodologique, mais leur qualité
+    // varie selon le nombre, la proximité, la récence, la similarité et la dispersion.
+    const dataQuality = 100 * (
+      0.30 * countQ +
+      0.22 * similarityQ +
+      0.18 * distanceQ +
+      0.15 * recencyQ +
+      0.15 * dispersionQ
+    );
+    out.push({
+      key: "dvf",
+      name: "Ventes DVF comparables",
+      value: comparables.estimatedValue,
+      ppsm: comparables.effectivePpsm || comparables.weightedPpsm || comparables.medianPpsm,
+      quality: Math.round(dataQuality),
+      reason: `${count} ventes, similarité ${Math.round(comparables.avgScore || 0)}/100, distance moyenne ${comparables.avgDistanceKm == null ? "—" : comparables.avgDistanceKm.toFixed(2) + " km"}`,
+      baseReliability: 1.15
+    });
+  }
+
+  if (valuation?.mainValuation && subject?.livingArea > 0) {
+    const apiConfidence = clamp((Number(valuation.confidence) || 1) / 5, 0, 1);
+    const intervalRatio = valuation.lowerValuation && valuation.upperValuation
+      ? Math.max(0, (valuation.upperValuation - valuation.lowerValuation) / (2 * valuation.mainValuation))
+      : 0.20;
+    const intervalQ = clamp(1 - intervalRatio / 0.35, 0.05, 1);
+    const modelQuality = 100 * (0.60 * apiConfidence + 0.40 * intervalQ);
+    out.push({
+      key: "model",
+      name: "Modèle d'estimation",
+      value: valuation.mainValuation,
+      ppsm: Number(valuation.mainValuation) / subject.livingArea,
+      quality: Math.round(modelQuality),
+      reason: `confiance API ${Number(valuation.confidence) || 1}/5, intervalle ${valuation.lowerValuation && valuation.upperValuation ? Math.round(intervalRatio * 100) + "%" : "non communiqué"}`,
+      baseReliability: 0.85
+    });
+  }
+
+  if (districtPrice?.value && subject?.livingArea > 0) {
+    // Une valeur de quartier est utile comme ancrage spatial, mais elle est moins
+    // spécifique au bien qu'une vente comparable ou un modèle individualisé.
+    out.push({
+      key: "district",
+      name: "Prix du grand quartier",
+      value: Number(districtPrice.value) * subject.livingArea,
+      ppsm: Number(districtPrice.value),
+      quality: 55,
+      reason: "indicateur de marché agrégé du grand quartier",
+      baseReliability: 0.60
+    });
+  }
+
+  return out;
+}
+
+function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject, confidenceDetails }) {
+  const sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
+
+  // Étape 1 : consensus robuste. Il sert uniquement à mesurer l'accord entre
+  // sources, pas à fixer directement le prix final.
+  const consensus = weightedMedian(sources, x => x.ppsm, x => Math.max(1, x.quality * x.baseReliability));
+
+  const scored = sources.map(source => {
+    const deviation = consensus && source.ppsm > 0
+      ? Math.abs(source.ppsm - consensus) / consensus
+      : 0;
+    // L'accord augmente/diminue le poids sans pouvoir annuler une source.
+    const agreementFactor = clamp(Math.exp(-deviation / 0.22), 0.55, 1.05);
+    const rawWeight = Math.max(0.01, (source.quality / 100) * source.baseReliability * agreementFactor);
+    return { ...source, deviation, agreementFactor, rawWeight };
+  });
+
+  // Les éventuelles sources optionnelles restent compatibles avec l'architecture,
+  // mais elles ne sont pas activées en mode économie API.
+  const listPpsm = listingMedianPpsm(listings);
+  if (listPpsm) {
+    const deviation = consensus ? Math.abs(listPpsm - consensus) / consensus : 0;
+    const agreementFactor = clamp(Math.exp(-deviation / 0.22), 0.50, 1.05);
+    scored.push({
+      key: "listings",
+      name: "Annonces actuellement en vente",
+      value: listPpsm * subject.livingArea,
+      ppsm: listPpsm,
+      quality: 45,
+      reason: "prix affichés, non prix de vente",
+      baseReliability: 0.45,
+      deviation,
+      agreementFactor,
+      rawWeight: Math.max(0.01, 0.45 * agreementFactor)
+    });
+  }
+
+  const totalWeight = scored.reduce((s, x) => s + x.rawWeight, 0);
   if (!totalWeight) throw new Error("Pas assez de données de marché pour calculer une estimation.");
-  const raw = signals.reduce((s, x) => s + x.value * x.weight, 0) / totalWeight;
+
+  const rawPpsm = scored.reduce((s, x) => s + x.ppsm * x.rawWeight, 0) / totalWeight;
+  const raw = rawPpsm * subject.livingArea;
   const main = round1000(raw);
 
-  const spreadBase = confidenceDetails?.spread ?? (comparables?.total >= 5 ? 0.09 : comparables?.total >= 3 ? 0.12 : 0.16);
+  const spreadBase = confidenceDetails?.spread ?? 0.12;
   const apiSpread = valuation?.lowerValuation && valuation?.upperValuation && valuation.mainValuation
     ? Math.max((valuation.upperValuation - valuation.lowerValuation) / (2 * valuation.mainValuation), 0)
     : spreadBase;
+  // La fourchette tient compte à la fois de la dispersion DVF et de l'incertitude
+  // de l'API, sans utiliser le prix souhaité du propriétaire.
   const spread = Math.min(0.22, Math.max(spreadBase, apiSpread));
+
+  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
+  const weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
+  if (normalizedWeights.length) {
+    let maxIndex = 0;
+    for (let i = 1; i < scored.length; i++) {
+      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
+    }
+    normalizedWeights[maxIndex] += weightDelta;
+  }
 
   return {
     main,
     low: round1000(main * (1 - spread)),
     high: round1000(main * (1 + spread)),
-    signals: signals.map(s => ({ ...s, value: round100(s.value), weight: Math.round((s.weight / totalWeight) * 100) })),
+    consensusPpsm: consensus,
+    signals: scored.map((s, i) => ({
+      ...s,
+      value: round100(s.value),
+      weight: normalizedWeights[i],
+      quality: s.quality,
+      agreement: Math.round(s.agreementFactor * 100),
+      deviationPct: Math.round(s.deviation * 100)
+    })),
     spread
   };
 }
@@ -388,28 +560,22 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
   const avgDistance = comparables?.avgDistanceKm;
   const avgAge = comparables?.avgAgeMonths;
   const avgSimilarity = comparables?.avgScore;
-  const values = [];
 
-  if (comparables?.medianPpsm) values.push(comparables.medianPpsm);
-  if (comparables?.weightedPpsm) values.push(comparables.weightedPpsm);
-  if (valuation?.mainValuation && subject?.livingArea > 0) values.push(Number(valuation.mainValuation) / subject.livingArea);
-  if (districtPrice?.value) values.push(Number(districtPrice.value));
-  if (cityPrice?.value) values.push(Number(cityPrice.value));
-  const listPpsm = listingMedianPpsm(listings);
-  if (listPpsm) values.push(Number(listPpsm));
-
-  const dispersionValues = comparables?.total ? [comparables.medianPpsm, comparables.weightedPpsm] : [];
   const q1 = comparables?.total ? percentile((comparables.data || []).map(x => x.sqmPrice), 0.25) : null;
   const q3 = comparables?.total ? percentile((comparables.data || []).map(x => x.sqmPrice), 0.75) : null;
   const medianPpsm = comparables?.medianPpsm || null;
   const iqrRatio = Number.isFinite(q1) && Number.isFinite(q3) && medianPpsm > 0
     ? Math.max(0, (q3 - q1) / medianPpsm)
     : null;
+  if (comparables) comparables.iqrRatio = iqrRatio;
 
-  const cleanValues = values.filter(x => Number.isFinite(x) && x > 0);
-  const sourceMedian = median(cleanValues);
-  const sourceDeviation = sourceMedian && cleanValues.length > 1
-    ? median(cleanValues.map(x => Math.abs(x - sourceMedian) / sourceMedian))
+  // Une seule valeur par source : DVF, modèle, quartier, puis éventuellement
+  // annonces. La médiane et la moyenne pondérée DVF ne comptent pas comme deux sources.
+  const sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
+  const ppsms = sources.map(s => s.ppsm).filter(x => Number.isFinite(x) && x > 0);
+  const sourceMedian = median(ppsms);
+  const sourceDeviation = sourceMedian && ppsms.length > 1
+    ? median(ppsms.map(x => Math.abs(x - sourceMedian) / sourceMedian))
     : null;
 
   const countPts = count >= 15 ? 20 : count >= 10 ? 18 : count >= 7 ? 15 : count >= 5 ? 12 : count >= 3 ? 8 : count >= 1 ? 4 : 0;
@@ -418,8 +584,8 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
   const similarityPts = avgSimilarity == null ? 0 : avgSimilarity >= 85 ? 15 : avgSimilarity >= 75 ? 13 : avgSimilarity >= 65 ? 10 : avgSimilarity >= 55 ? 7 : 4;
   const dispersionPts = iqrRatio == null ? 4 : iqrRatio <= 0.10 ? 15 : iqrRatio <= 0.15 ? 12 : iqrRatio <= 0.20 ? 9 : iqrRatio <= 0.30 ? 6 : 3;
   const agreementPts = sourceDeviation == null ? 3 : sourceDeviation <= 0.05 ? 10 : sourceDeviation <= 0.10 ? 8 : sourceDeviation <= 0.15 ? 6 : sourceDeviation <= 0.25 ? 3 : 1;
-  const coverageCount = [valuation?.mainValuation, districtPrice?.value, cityPrice?.value, listPpsm, comparables?.estimatedValue].filter(x => Number.isFinite(Number(x)) && Number(x) > 0).length;
-  const coveragePts = coverageCount >= 5 ? 10 : coverageCount === 4 ? 9 : coverageCount === 3 ? 7 : coverageCount === 2 ? 5 : coverageCount === 1 ? 3 : 0;
+  const coverageCount = sources.length;
+  const coveragePts = coverageCount >= 4 ? 10 : coverageCount === 3 ? 7 : coverageCount === 2 ? 5 : coverageCount === 1 ? 3 : 0;
 
   factors.push({ key: "comparables", label: "Nombre de comparables", score: countPts, max: 20, detail: `${count} vente${count > 1 ? "s" : ""} retenue${count > 1 ? "s" : ""}` });
   factors.push({ key: "distance", label: "Proximité géographique", score: distancePts, max: 15, detail: avgDistance == null ? "Distance indisponible" : `moyenne ${avgDistance.toFixed(2)} km` });
@@ -437,14 +603,16 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
   const confidencePart = (100 - score100) * 0.0007;
   const spread = clamp(0.045 + dispersionPart + disagreementPart + confidencePart, 0.055, 0.22);
 
-  return { score100, rating, label, factors, iqrRatio, sourceDeviation, spread };
+  return { score100, rating, label, factors, iqrRatio, sourceDeviation, spread, sourceCount: sources.length };
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.4.4", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.5.1", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const startedAt = Date.now();
   try {
     if (!API_KEY) return res.status(500).json({ error: "La clé IMMO_DATA_API_KEY n'est pas configurée sur le serveur." });
 
@@ -470,7 +638,8 @@ app.post("/api/analyze", async (req, res) => {
     if (!subject.address) return res.status(400).json({ error: "L'adresse du bien est obligatoire." });
     if (!subject.livingArea || subject.livingArea < 10) return res.status(400).json({ error: "La surface habitable doit être renseignée." });
 
-    const geo = await geocodeAddress(subject.address);
+    logEvent("analysis_start", { requestId, realtyType: subject.realtyType, livingArea: subject.livingArea });
+    const geo = await geocodeAddress(subject.address, requestId);
     subject.latitude = geo.latitude;
     subject.longitude = geo.longitude;
 
@@ -490,6 +659,16 @@ app.post("/api/analyze", async (req, res) => {
       livingArea: valuationArea
     };
 
+    const valuationValidation = [
+      ["longitude", Number.isFinite(valuationParams.longitude)],
+      ["latitude", Number.isFinite(valuationParams.latitude)],
+      ["realtyType", valuationParams.realtyType === "house" || valuationParams.realtyType === "apartment"],
+      ["nbRooms", Number.isInteger(valuationParams.nbRooms) && valuationParams.nbRooms >= 1 && valuationParams.nbRooms <= 15],
+      ["livingArea", Number.isFinite(valuationParams.livingArea) && valuationParams.livingArea >= 1 && valuationParams.livingArea <= 10000]
+    ];
+    const invalidValuationParam = valuationValidation.find(([, ok]) => !ok);
+    if (invalidValuationParam) throw new Error(`Paramètre /valuation invalide avant envoi : ${invalidValuationParam[0]}`);
+
     const valuationPromise = immo("/v1/valuation", valuationParams)
       .then(value => ({ value, error: null, params: valuationParams }))
       .catch(error => ({
@@ -505,12 +684,12 @@ app.post("/api/analyze", async (req, res) => {
     // V5.4.4 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
     // Les annonces et le prix commune sont désactivés par défaut pour éviter d'épuiser le solde.
-    const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType);
+    const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType, requestId);
 
     const [valuationResult, districtPrice, comparables] = await Promise.all([
       valuationPromise,
       districtPromise,
-      findComparables(subject, subject.realtyType)
+      findComparables(subject, subject.realtyType, requestId)
     ]);
 
     const valuation = valuationResult.value;
@@ -521,7 +700,8 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.4.4",
+      version: "5.5.1",
+      requestId,
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -571,23 +751,28 @@ app.post("/api/analyze", async (req, res) => {
         analyzedTransactions: comparables.analyzedCount || comparables.foundCount || 0,
         retainedComparables: comparables.total || 0,
         reliability: confidenceDetails,
+        consensusPpsm: final.consensusPpsm,
+        filterMode: comparables.filterMode || null,
+        filterReason: comparables.filterReason || null,
+        sourceQuality: final.signals.map(s => ({ key: s.key, name: s.name, quality: s.quality, agreement: s.agreement, deviationPct: s.deviationPct, reason: s.reason })),
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
           valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}${valuationResult.error.apiBody?.message ? ` (${valuationResult.error.apiBody.message})` : ""}.` : null
         ].filter(Boolean).join(" ") || null,
-        note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les annonces et la commune sont désactivées par défaut. Le classement des comparables est réalisé localement."
+        note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les poids sont calculés selon la qualité de chaque source, puis ajustés selon leur accord avec un consensus robuste. Le prix souhaité n’intervient jamais dans le calcul."
       },
-      api: { maxCallsPerAnalysis: 4, cachedResponses: API_CACHE.size, transactionsUnavailable: Boolean(comparables.unavailable), listingsEnabled: false, cityPriceEnabled: false },
+      api: { maxCallsPerAnalysis: 4, cachedResponses: API_CACHE.size, transactionsUnavailable: Boolean(comparables.unavailable), valuationUnavailable: Boolean(valuationResult.error), listingsEnabled: false, cityPriceEnabled: false, mockMode: MOCK_API_MODE },
       signals: final.signals
     };
 
+    logEvent("analysis_complete", { requestId, durationMs: Date.now() - startedAt, confidence: confidenceDetails.score100, sources: final.signals.map(s => s.key) });
     res.json(result);
   } catch (error) {
-    console.error(error);
+    logEvent("analysis_error", { requestId, durationMs: Date.now() - startedAt, status: error.status || 500, error: error.message });
     res.status(500).json({ error: error.message || "Erreur inconnue" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.4.3 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.5.1 sur http://localhost:${PORT}`);
 });
