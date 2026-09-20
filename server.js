@@ -11,8 +11,7 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.IMMO_DATA_API_KEY;
-const FREE_MODE = true; // 🔒 ZÉRO APPEL IMMO DATA : aucune consommation de crédit
-const MOCK_API_MODE = FREE_MODE || /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE || ""));
+const MOCK_API_MODE = /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE || ""));
 const COMPARABLE_MIN_PPSM = Math.max(0, cleanNumber(process.env.COMPARABLE_MIN_PPSM, 400));
 const COMPARABLE_ROBUST_MULT = Math.max(0.5, cleanNumber(process.env.COMPARABLE_ROBUST_MULT, 1.5));
 const IMMO_BASE = "https://api.immo-data.fr";
@@ -516,9 +515,24 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   const totalWeight = scored.reduce((s, x) => s + x.rawWeight, 0);
   if (!totalWeight) throw new Error("Pas assez de données de marché pour calculer une estimation.");
 
-  const rawPpsm = scored.reduce((s, x) => s + x.ppsm * x.rawWeight, 0) / totalWeight;
-  const raw = rawPpsm * subject.livingArea;
-  const main = round1000(raw);
+  // V6 : le prix final est calculé à partir des mêmes valeurs et des mêmes
+  // poids que ceux affichés à l'utilisateur. Ainsi, le résultat est toujours
+  // reconstructible et ne dépend jamais de valeurs internes non affichées.
+  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
+  let weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
+  if (normalizedWeights.length) {
+    let maxIndex = 0;
+    for (let i = 1; i < scored.length; i++) {
+      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
+    }
+    normalizedWeights[maxIndex] += weightDelta;
+  }
+
+  const displayedValues = scored.map(s => round100(s.value));
+  const weightedDisplayedValue = displayedValues.reduce((sum, value, i) =>
+    sum + value * (normalizedWeights[i] / 100), 0
+  );
+  const main = round1000(weightedDisplayedValue);
 
   const spreadBase = confidenceDetails?.spread ?? 0.12;
   const apiSpread = valuation?.lowerValuation && valuation?.upperValuation && valuation.mainValuation
@@ -528,15 +542,13 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   // de l'API, sans utiliser le prix souhaité du propriétaire.
   const spread = Math.min(0.22, Math.max(spreadBase, apiSpread));
 
-  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
-  const weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
-  if (normalizedWeights.length) {
-    let maxIndex = 0;
-    for (let i = 1; i < scored.length; i++) {
-      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
-    }
-    normalizedWeights[maxIndex] += weightDelta;
-  }
+  const contributions = scored.map((s, i) => ({
+    key: s.key,
+    name: s.name,
+    value: displayedValues[i],
+    weight: normalizedWeights[i],
+    contribution: round100(displayedValues[i] * (normalizedWeights[i] / 100))
+  }));
 
   return {
     main,
@@ -549,8 +561,15 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
       weight: normalizedWeights[i],
       quality: s.quality,
       agreement: Math.round(s.agreementFactor * 100),
-      deviationPct: Math.round(s.deviation * 100)
+      deviationPct: Math.round(s.deviation * 100),
+      contribution: contributions[i].contribution
     })),
+    displayedCalculation: {
+      inputs: contributions,
+      totalWeight: normalizedWeights.reduce((sum, w) => sum + w, 0),
+      weightedTotal: round100(weightedDisplayedValue),
+      final: main
+    },
     spread
   };
 }
@@ -608,27 +627,34 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.5.1", freeMode: FREE_MODE, paidApiDisabled: FREE_MODE, apiKeyConfigured: false, mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "6.1.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const startedAt = Date.now();
   try {
-    // Mode gratuit permanent : aucune clé API n'est requise et aucun appel payant n'est effectué.
+    // Mode test gratuit : aucune clé API n'est nécessaire.
+    // MOCK_API_MODE=true force toutes les réponses Immo Data en local
+    // et n'effectue aucun appel payant.
+    if (!API_KEY && !MOCK_API_MODE) {
+      return res.status(500).json({
+        error: "La clé IMMO_DATA_API_KEY n'est pas configurée. Pour tester gratuitement, démarre le serveur avec MOCK_API_MODE=true."
+      });
+    }
 
     const b = req.body || {};
     const subject = {
       address: String(b.address || "").trim(),
       realtyType: ["house","apartment","building","garage","parking","land","agricultural_land","commercial","industrial","other"].includes(String(b.realtyType)) ? String(b.realtyType) : "house",
       livingArea: cleanNumber(b.livingArea),
-      propertyFeatures: b.propertyFeatures && typeof b.propertyFeatures === "object" ? b.propertyFeatures : {},
       landArea: cleanNumber(b.landArea),
       rooms: cleanNumber(b.rooms),
       bathrooms: cleanNumber(b.bathrooms),
       constructionYear: cleanNumber(b.constructionYear),
       dpe: String(b.dpe || ""),
       condition: String(b.condition || ""),
+      propertyFeatures: (b.propertyFeatures && typeof b.propertyFeatures === "object") ? b.propertyFeatures : {},
       parking: Boolean(b.parking),
       garage: Boolean(b.garage),
       cellar: Boolean(b.cellar),
@@ -652,9 +678,6 @@ app.post("/api/analyze", async (req, res) => {
     // fasse tomber toute l'estimation avec un HTTP 400.
     const valuationRooms = Math.min(15, Math.max(1, Math.round(subject.rooms || 1)));
     const valuationArea = Math.min(10000, Math.max(1, Number(subject.livingArea)));
-    // Immo Data /valuation accepte actuellement les types maison et appartement.
-    // Les autres catégories restent sélectionnables dans l'interface et sont
-    // conservées dans le dossier, mais utilisent le moteur compatible le plus proche.
     const valuationRealtyType = subject.realtyType === "apartment" ? "apartment" : "house";
     const valuationParams = {
       longitude: Number(subject.longitude),
@@ -689,12 +712,12 @@ app.post("/api/analyze", async (req, res) => {
     // V5.4.4 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
     // Les annonces et le prix commune sont désactivés par défaut pour éviter d'épuiser le solde.
-    const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType, requestId);
+    const districtPromise = marketPrice(geo.districtCode, "district", valuationRealtyType, requestId);
 
     const [valuationResult, districtPrice, comparables] = await Promise.all([
       valuationPromise,
       districtPromise,
-      findComparables(subject, subject.realtyType, requestId)
+      findComparables(subject, valuationRealtyType, requestId)
     ]);
 
     const valuation = valuationResult.value;
@@ -705,7 +728,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.5.1",
+      version: "6.1.0",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -722,7 +745,8 @@ app.post("/api/analyze", async (req, res) => {
         rooms: subject.rooms,
         bathrooms: subject.bathrooms,
         constructionYear: subject.constructionYear,
-        dpe: subject.dpe
+        dpe: subject.dpe,
+        propertyFeatures: subject.propertyFeatures
       },
       estimate: {
         main: final.main,
@@ -760,13 +784,14 @@ app.post("/api/analyze", async (req, res) => {
         filterMode: comparables.filterMode || null,
         filterReason: comparables.filterReason || null,
         sourceQuality: final.signals.map(s => ({ key: s.key, name: s.name, quality: s.quality, agreement: s.agreement, deviationPct: s.deviationPct, reason: s.reason })),
+        displayedCalculation: final.displayedCalculation,
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
           valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}${valuationResult.error.apiBody?.message ? ` (${valuationResult.error.apiBody.message})` : ""}.` : null
         ].filter(Boolean).join(" ") || null,
-        note: FREE_MODE ? "MODE GRATUIT : 0 appel Immo Data, 0 crédit consommé. Les données sont simulées localement pour tester le moteur et l’interface. Pour une estimation immobilière réelle, il faudra brancher des données publiques gratuites ou une API payante. Le prix souhaité n’intervient jamais dans le calcul." : "Mode économie API : 4 appels maximum par analyse. Les poids sont calculés selon la qualité de chaque source, puis ajustés selon leur accord avec un consensus robuste. Le prix souhaité n’intervient jamais dans le calcul."
+        note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les poids sont calculés selon la qualité de chaque source, puis ajustés selon leur accord avec un consensus robuste. Le prix souhaité n’intervient jamais dans le calcul."
       },
-      api: { maxCallsPerAnalysis: 0, cachedResponses: API_CACHE.size, transactionsUnavailable: false, valuationUnavailable: false, listingsEnabled: false, cityPriceEnabled: false, mockMode: MOCK_API_MODE, freeMode: FREE_MODE, paidApiDisabled: FREE_MODE },
+      api: { maxCallsPerAnalysis: 4, cachedResponses: API_CACHE.size, transactionsUnavailable: Boolean(comparables.unavailable), valuationUnavailable: Boolean(valuationResult.error), listingsEnabled: false, cityPriceEnabled: false, mockMode: MOCK_API_MODE },
       signals: final.signals
     };
 
@@ -779,5 +804,8 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.5.2 — MODE GRATUIT PERMANENT — http://localhost:${PORT}`);
+  console.log(`JML Estimateur V6.1.0 sur http://localhost:${PORT}`);
+  console.log(MOCK_API_MODE
+    ? "MODE TEST GRATUIT : aucune requête Immo Data réelle ne sera envoyée."
+    : "MODE API RÉELLE : les appels Immo Data peuvent consommer des crédits.");
 });
