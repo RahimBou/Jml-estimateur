@@ -13,16 +13,6 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.IMMO_DATA_API_KEY;
 const FREE_MODE = true; // 🔒 ZÉRO APPEL IMMO DATA : aucune consommation de crédit
 const MOCK_API_MODE = FREE_MODE || /^(1|true|yes)$/i.test(String(process.env.MOCK_API_MODE || ""));
-const PROPERTY_TYPES = new Set(["house","apartment","land","commercial","annex","multiple"]);
-const TYPE_LABELS = {
-  house: "Maison",
-  apartment: "Appartement",
-  land: "Terrain",
-  commercial: "Local commercial / professionnel",
-  annex: "Dépendance (garage, box, parking)",
-  multiple: "Ensemble immobilier (immeuble / mixte)"
-};
-const AREA_TYPES = new Set(["land","commercial","annex","multiple"]);
 const COMPARABLE_MIN_PPSM = Math.max(0, cleanNumber(process.env.COMPARABLE_MIN_PPSM, 400));
 const COMPARABLE_ROBUST_MULT = Math.max(0.5, cleanNumber(process.env.COMPARABLE_ROBUST_MULT, 1.5));
 const IMMO_BASE = "https://api.immo-data.fr";
@@ -216,15 +206,7 @@ function cloneJson(value) {
 function mockResponse(endpoint, params) {
   if (endpoint === "/v1/geocode") return [{ geoLevel: "address", label: params.q || "Adresse test", longitude: 3.235, latitude: 50.175, cityName: "Cambrai", postCode: "59400", inseeCode: "59122", districtCode: "TEST-DISTRICT", districtName: "Grand quartier test" }];
   if (endpoint === "/v1/market/price/current") return { value: 1760 };
-  if (endpoint === "/v1/valuation") {
-    const area = Number(params.livingArea || 100);
-    const type = String(params.realtyType || "house");
-    const rates = { house: 2350, apartment: 2450, land: 110, commercial: 1450, annex: 650, multiple: 1950 };
-    const ppsm = rates[type] || 1800;
-    const main = Math.round((ppsm * area) / 500) * 500;
-    const spread = type === "land" ? 0.28 : (type === "annex" ? 0.22 : (type === "commercial" ? 0.24 : 0.18));
-    return { mainValuation: main, lowerValuation: Math.round(main * (1 - spread)), upperValuation: Math.round(main * (1 + spread)), confidence: 3 };
-  }
+  if (endpoint === "/v1/valuation") return { mainValuation: 188000, lowerValuation: 160000, upperValuation: 215000, confidence: 4 };
   if (endpoint === "/v1/transactions") {
     const area = Number(params.livingAreaMin || 100) + 10;
     return { data: Array.from({ length: 18 }, (_, i) => ({ txId: `MOCK-${i+1}`, txDate: isoDateMonthsAgo(Math.max(1, i % 18)), price: (1550 + (i % 6) * 75) * area, squareMeterPrice: 1550 + (i % 6) * 75, attributes: { livingArea: area + (i % 5) - 2, landArea: 300 + i * 12, rooms: 4 }, lot: [{ location: { geometry: { coordinates: [3.235 + i * 0.001, 50.175 + i * 0.001] }, address: { streetName: `Rue test ${i+1}`, streetNumber: `${i+1}` } } }] })) };
@@ -427,77 +409,6 @@ function weightedMedian(items, valueFn, weightFn) {
   return rows[rows.length - 1].value;
 }
 
-
-function featureAdjustmentDetails(subject) {
-  const items = [];
-  const type = subject.realtyType;
-  const area = Number(subject.livingArea || 0);
-  const add = (label, pct, detail) => { if (pct) items.push({ label, pct: Math.round(pct * 100), detail }); };
-
-  if (area > 0) {
-    if (area < 50) add('Petite surface', 0.08, 'surface < 50 m²');
-    else if (area < 80) add('Surface compacte', 0.04, 'surface 50–79 m²');
-    else if (area > 180) add('Grande surface', -0.08, 'surface > 180 m²');
-    else if (area > 120) add('Grande surface', -0.04, 'surface 121–180 m²');
-  }
-
-  if (type === 'house' || type === 'apartment' || type === 'multiple') {
-    const dpeAdj = { A: 0.06, B: 0.04, C: 0.02, D: 0, E: -0.03, F: -0.06, G: -0.09 };
-    add('DPE', dpeAdj[subject.dpe] || 0, subject.dpe ? `classe ${subject.dpe}` : 'non renseigné');
-    const gesAdj = { A: 0.02, B: 0.015, C: 0.01, D: 0, E: -0.01, F: -0.02, G: -0.03 };
-    add('GES', gesAdj[subject.ges] || 0, subject.ges ? `classe ${subject.ges}` : 'non renseigné');
-    const conditionAdj = { excellent: 0.06, very_good: 0.04, good: 0.02, refresh: -0.04, major_work: -0.10 };
-    add('État général', conditionAdj[subject.condition] || 0, subject.condition || 'non renseigné');
-    if (subject.constructionYear >= 2015) add('Construction récente', 0.03, `année ${subject.constructionYear}`);
-    else if (subject.constructionYear >= 2000) add('Construction récente', 0.015, `année ${subject.constructionYear}`);
-    else if (subject.constructionYear > 0 && subject.constructionYear < 1950) add('Construction ancienne', -0.025, `année ${subject.constructionYear}`);
-    if (subject.bathrooms >= 2) add('Salles de bains', 0.015, `${subject.bathrooms} salles d'eau/bains`);
-    if (subject.bathrooms >= 3) add('Salles de bains supplémentaires', 0.01, `${subject.bathrooms} salles d'eau/bains`);
-    if (subject.bedrooms >= 4) add('Chambres', 0.02, `${subject.bedrooms} chambres`);
-    else if (subject.bedrooms >= 3) add('Chambres', 0.01, `${subject.bedrooms} chambres`);
-  }
-  if (type === 'house' || type === 'multiple') {
-    if (subject.landArea > 0) {
-      if (subject.landArea >= 1000) add('Grand terrain', 0.05, `${subject.landArea} m²`);
-      else if (subject.landArea >= 500) add('Terrain', 0.025, `${subject.landArea} m²`);
-      else if (subject.landArea < 150) add('Petit terrain', -0.02, `${subject.landArea} m²`);
-    }
-    if (subject.pool) add('Piscine', 0.03, 'présente');
-  }
-  if (type === 'apartment') {
-    if (subject.elevator) add('Ascenseur', 0.02, 'présent');
-    if (subject.floor === 0) add('Rez-de-chaussée', -0.03, 'RDC');
-    else if (subject.floor >= 4) add('Étage élevé', subject.elevator ? 0.02 : -0.02, `${subject.floor}e étage`);
-    if (subject.level >= 5 && subject.floor >= 4 && !subject.elevator) add('Sans ascenseur', -0.02, 'étage élevé');
-  }
-  if (subject.garage) add('Garage', 0.03, 'présent');
-  if (subject.parking) add('Parking', 0.02, 'présent');
-  if (subject.cellar) add('Cave', 0.01, 'présente');
-  if (subject.terrace) add('Terrasse', 0.02, 'présente');
-  if (subject.patio) add('Cour / patio', 0.02, 'présent');
-  if (subject.niceView) add('Vue', 0.02, 'belle vue');
-
-  const rawPct = items.reduce((sum, x) => sum + x.pct, 0);
-  const factor = clamp(1 + rawPct / 100, 0.78, 1.18);
-  const appliedPct = Math.round((factor - 1) * 100);
-  return { items, rawPct, appliedPct, factor };
-}
-
-function featureAdjustment(subject) {
-  return featureAdjustmentDetails(subject).factor;
-}
-
-function applyFreeModeFeatureAdjustment(sources, subject) {
-  if (!FREE_MODE) return sources;
-  const details = featureAdjustmentDetails(subject);
-  return sources.map(source => ({
-    ...source,
-    ppsm: source.ppsm * details.factor,
-    value: source.value * details.factor,
-    featureAdjustmentPct: details.appliedPct
-  }));
-}
-
 function sourceQualityAndValue({ valuation, districtPrice, comparables, subject }) {
   const out = [];
 
@@ -566,8 +477,7 @@ function sourceQualityAndValue({ valuation, districtPrice, comparables, subject 
 }
 
 function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject, confidenceDetails }) {
-  let sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
-  sources = applyFreeModeFeatureAdjustment(sources, subject);
+  const sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
 
   // Étape 1 : consensus robuste. Il sert uniquement à mesurer l'accord entre
   // sources, pas à fixer directement le prix final.
@@ -662,8 +572,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 
   // Une seule valeur par source : DVF, modèle, quartier, puis éventuellement
   // annonces. La médiane et la moyenne pondérée DVF ne comptent pas comme deux sources.
-  let sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
-  sources = applyFreeModeFeatureAdjustment(sources, subject);
+  const sources = sourceQualityAndValue({ valuation, districtPrice, comparables, subject });
   const ppsms = sources.map(s => s.ppsm).filter(x => Number.isFinite(x) && x > 0);
   const sourceMedian = median(ppsms);
   const sourceDeviation = sourceMedian && ppsms.length > 1
@@ -699,7 +608,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.5.5", freeMode: FREE_MODE, paidApiDisabled: FREE_MODE, apiKeyConfigured: false, mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "5.5.1", freeMode: FREE_MODE, paidApiDisabled: FREE_MODE, apiKeyConfigured: false, mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -711,31 +620,25 @@ app.post("/api/analyze", async (req, res) => {
     const b = req.body || {};
     const subject = {
       address: String(b.address || "").trim(),
-      realtyType: PROPERTY_TYPES.has(String(b.realtyType)) ? String(b.realtyType) : "house",
+      realtyType: ["house","apartment","building","garage","parking","land","agricultural_land","commercial","industrial","other"].includes(String(b.realtyType)) ? String(b.realtyType) : "house",
       livingArea: cleanNumber(b.livingArea),
+      propertyFeatures: b.propertyFeatures && typeof b.propertyFeatures === "object" ? b.propertyFeatures : {},
       landArea: cleanNumber(b.landArea),
       rooms: cleanNumber(b.rooms),
       bathrooms: cleanNumber(b.bathrooms),
       constructionYear: cleanNumber(b.constructionYear),
       dpe: String(b.dpe || ""),
-      ges: String(b.ges || ""),
       condition: String(b.condition || ""),
-      bedrooms: cleanNumber(b.bedrooms),
-      level: cleanNumber(b.level),
-      floor: cleanNumber(b.floor),
       parking: Boolean(b.parking),
       garage: Boolean(b.garage),
       cellar: Boolean(b.cellar),
       terrace: Boolean(b.terrace),
       patio: Boolean(b.patio),
-      niceView: Boolean(b.niceView),
-      elevator: Boolean(b.elevator),
-      pool: Boolean(b.pool)
+      niceView: Boolean(b.niceView)
     };
 
     if (!subject.address) return res.status(400).json({ error: "L'adresse du bien est obligatoire." });
-    if (!subject.livingArea || subject.livingArea < 1) return res.status(400).json({ error: "La surface du bien doit être renseignée." });
-    if (!PROPERTY_TYPES.has(subject.realtyType)) return res.status(400).json({ error: "Type de bien non reconnu." });
+    if (!subject.livingArea || subject.livingArea < 10) return res.status(400).json({ error: "La surface habitable doit être renseignée." });
 
     logEvent("analysis_start", { requestId, realtyType: subject.realtyType, livingArea: subject.livingArea });
     const geo = await geocodeAddress(subject.address, requestId);
@@ -749,8 +652,10 @@ app.post("/api/analyze", async (req, res) => {
     // fasse tomber toute l'estimation avec un HTTP 400.
     const valuationRooms = Math.min(15, Math.max(1, Math.round(subject.rooms || 1)));
     const valuationArea = Math.min(10000, Math.max(1, Number(subject.livingArea)));
-    const valuationSupported = ["house","apartment"].includes(subject.realtyType);
-    const valuationRealtyType = valuationSupported ? subject.realtyType : null;
+    // Immo Data /valuation accepte actuellement les types maison et appartement.
+    // Les autres catégories restent sélectionnables dans l'interface et sont
+    // conservées dans le dossier, mais utilisent le moteur compatible le plus proche.
+    const valuationRealtyType = subject.realtyType === "apartment" ? "apartment" : "house";
     const valuationParams = {
       longitude: Number(subject.longitude),
       latitude: Number(subject.latitude),
@@ -762,17 +667,14 @@ app.post("/api/analyze", async (req, res) => {
     const valuationValidation = [
       ["longitude", Number.isFinite(valuationParams.longitude)],
       ["latitude", Number.isFinite(valuationParams.latitude)],
-      ["realtyType", valuationSupported],
+      ["realtyType", valuationParams.realtyType === "house" || valuationParams.realtyType === "apartment"],
       ["nbRooms", Number.isInteger(valuationParams.nbRooms) && valuationParams.nbRooms >= 1 && valuationParams.nbRooms <= 15],
       ["livingArea", Number.isFinite(valuationParams.livingArea) && valuationParams.livingArea >= 1 && valuationParams.livingArea <= 10000]
     ];
     const invalidValuationParam = valuationValidation.find(([, ok]) => !ok);
+    if (invalidValuationParam) throw new Error(`Paramètre /valuation invalide avant envoi : ${invalidValuationParam[0]}`);
 
-    const valuationPromise = !valuationSupported
-      ? Promise.resolve({ value: null, params: null, error: { status: null, message: "Le modèle /valuation Immo Data est disponible uniquement pour Maison et Appartement." } })
-      : invalidValuationParam
-        ? Promise.resolve({ value: null, params: valuationParams, error: { status: null, message: `Paramètre /valuation invalide avant envoi : ${invalidValuationParam[0]}` } })
-        : immo("/v1/valuation", valuationParams)
+    const valuationPromise = immo("/v1/valuation", valuationParams)
       .then(value => ({ value, error: null, params: valuationParams }))
       .catch(error => ({
         value: null,
@@ -803,7 +705,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.5.5",
+      version: "5.5.1",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -815,20 +717,12 @@ app.post("/api/analyze", async (req, res) => {
         latitude: geo.latitude,
         longitude: geo.longitude,
         realtyType: subject.realtyType,
-        realtyTypeLabel: TYPE_LABELS[subject.realtyType] || subject.realtyType,
         livingArea: subject.livingArea,
         landArea: subject.landArea,
         rooms: subject.rooms,
         bathrooms: subject.bathrooms,
         constructionYear: subject.constructionYear,
-        dpe: subject.dpe,
-        ges: subject.ges,
-        bedrooms: subject.bedrooms,
-        level: subject.level,
-        floor: subject.floor,
-        condition: subject.condition,
-        features: { parking: subject.parking, garage: subject.garage, cellar: subject.cellar, terrace: subject.terrace, patio: subject.patio, niceView: subject.niceView, elevator: subject.elevator, pool: subject.pool },
-        freeModeFeatureAdjustmentPct: featureAdjustmentDetails(subject).appliedPct, featureAdjustmentDetails: featureAdjustmentDetails(subject).items
+        dpe: subject.dpe
       },
       estimate: {
         main: final.main,
@@ -865,8 +759,6 @@ app.post("/api/analyze", async (req, res) => {
         consensusPpsm: final.consensusPpsm,
         filterMode: comparables.filterMode || null,
         filterReason: comparables.filterReason || null,
-        featureAdjustmentPct: featureAdjustmentDetails(subject).appliedPct,
-        featureAdjustmentDetails: featureAdjustmentDetails(subject).items,
         sourceQuality: final.signals.map(s => ({ key: s.key, name: s.name, quality: s.quality, agreement: s.agreement, deviationPct: s.deviationPct, reason: s.reason })),
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
@@ -887,5 +779,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.5.5 — MODE GRATUIT PERMANENT — http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.5.2 — MODE GRATUIT PERMANENT — http://localhost:${PORT}`);
 });
