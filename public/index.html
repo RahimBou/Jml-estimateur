@@ -22,25 +22,28 @@ button{width:100%;border:0;border-radius:10px;padding:14px 18px;background:var(-
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.2 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V5.5.3 — MODE GRATUIT · aucune consommation de crédits</div></div></div></header>
 <main>
 <form id="form">
 <div class="card">
 <h2>📍 Le bien</h2>
 <div class="grid">
 <div class="full"><label>Adresse complète</label><input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières"></div>
-<div><label>Type de bien</label><select id="realtyType">
-<option value="house">Maison</option>
-<option value="apartment">Appartement</option>
-<option value="building">Immeuble</option>
-<option value="garage">Garage</option>
-<option value="parking">Parking</option>
-<option value="land">Terrain constructible</option>
-<option value="agricultural_land">Terrain agricole</option>
-<option value="commercial">Local commercial</option>
-<option value="industrial">Local industriel / entrepôt</option>
-<option value="other">Autre bien</option>
-</select></div>
+<div>
+<label>Type de bien</label>
+<select id="realtyType" name="realtyType">
+  <option value="house">🏠 Maison</option>
+  <option value="apartment">🏢 Appartement</option>
+  <option value="building">🏬 Immeuble</option>
+  <option value="garage">🚗 Garage</option>
+  <option value="parking">🅿️ Parking</option>
+  <option value="land">🌳 Terrain constructible</option>
+  <option value="agricultural_land">🌾 Terrain agricole</option>
+  <option value="commercial">🏪 Local commercial</option>
+  <option value="industrial">🏭 Local industriel / entrepôt</option>
+  <option value="other">🏠 Autre bien</option>
+</select>
+</div>
 <div id="fieldLivingArea"><label id="livingAreaLabel">Surface habitable (m²)</label><input id="livingArea" type="number" min="1" step="1" required placeholder="120"></div>
 <div id="fieldLandArea"><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
 <div id="fieldRooms"><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
@@ -124,8 +127,36 @@ function updatePropertyFields(){
   };
   df.innerHTML=html[type]||'';
 }
-$('realtyType').addEventListener('change', updatePropertyFields);
-updatePropertyFields();
+document.addEventListener('DOMContentLoaded', () => {
+  const typeSelect = $('realtyType');
+
+  // Sécurité : reconstruit toujours la liste complète des types.
+  // Cela évite qu'une ancienne version/copie du HTML ne laisse seulement
+  // « Maison » et « Appartement » visibles.
+  const typeOptions = [
+    ['house','🏠 Maison'],
+    ['apartment','🏢 Appartement'],
+    ['building','🏬 Immeuble'],
+    ['garage','🚗 Garage'],
+    ['parking','🅿️ Parking'],
+    ['land','🌳 Terrain constructible'],
+    ['agricultural_land','🌾 Terrain agricole'],
+    ['commercial','🏪 Local commercial'],
+    ['industrial','🏭 Local industriel / entrepôt'],
+    ['other','🏠 Autre bien']
+  ];
+
+  const currentType = typeSelect.value || 'house';
+  typeSelect.innerHTML = typeOptions
+    .map(([value,label]) => `<option value="${value}">${label}</option>`)
+    .join('');
+  typeSelect.value = typeOptions.some(([value]) => value === currentType)
+    ? currentType
+    : 'house';
+
+  typeSelect.addEventListener('change', updatePropertyFields);
+  updatePropertyFields();
+});
 
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
