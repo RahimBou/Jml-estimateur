@@ -1,201 +1,69 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JML Immobilier - Estimateur</title>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JML Immobilier — Estimateur V4.1</title>
   <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f6f8;
-      color: #20252b;
-    }
-
-    header {
-      background: #111827;
-      color: white;
-      padding: 22px;
-      text-align: center;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 28px;
-    }
-
-    header p {
-      margin: 6px 0 0;
-      opacity: .8;
-    }
-
-    main {
-      max-width: 900px;
-      margin: 25px auto;
-      padding: 0 15px;
-    }
-
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 22px;
-      margin-bottom: 20px;
-      box-shadow: 0 3px 15px rgba(0,0,0,.08);
-    }
-
-    h2 {
-      margin-top: 0;
-      color: #111827;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-    }
-
-    label {
-      display: block;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .full {
-      grid-column: 1 / -1;
-    }
-
-    .checks {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .checks label {
-      font-weight: normal;
-      background: #f9fafb;
-      padding: 10px;
-      border-radius: 8px;
-    }
-
-    .checks input {
-      width: auto;
-      margin-right: 8px;
-    }
-
-    button {
-      width: 100%;
-      padding: 16px;
-      border: 0;
-      border-radius: 10px;
-      background: #111827;
-      color: white;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button:hover {
-      opacity: .9;
-    }
-
-    #loading, #results, #sellerBox {
-      display: none;
-    }
-
-    .estimate {
-      text-align: center;
-      background: #f3f4f6;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 15px;
-    }
-
-    .estimate strong {
-      display: block;
-      font-size: 36px;
-      margin: 8px 0;
-    }
-
-    .range {
-      font-size: 18px;
-    }
-
-    .info {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-
-    .info div {
-      background: #f9fafb;
-      padding: 14px;
-      border-radius: 8px;
-    }
-
-    .error {
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 14px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      display: none;
-    }
-
-    .success {
-      background: #ecfdf5;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-    }
-
-    @media (max-width: 650px) {
-      .grid, .info, .checks {
-        grid-template-columns: 1fr;
-      }
-    }
+    :root { --navy:#1f2a44; --gold:#c7a45a; --bg:#f5f6f8; --card:#fff; --text:#202733; --muted:#687386; --danger:#b42318; --ok:#18794e; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text); }
+    header { background:var(--navy); color:white; padding:24px 18px; text-align:center; }
+    header h1 { margin:0 0 5px; font-size:25px; }
+    header p { margin:0; opacity:.85; }
+    main { max-width:1050px; margin:22px auto; padding:0 14px 40px; }
+    .card { background:var(--card); border-radius:14px; padding:20px; margin-bottom:18px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
+    h2 { margin:0 0 18px; color:var(--navy); font-size:20px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .full { grid-column:1/-1; }
+    label { display:block; font-weight:700; margin-bottom:6px; font-size:14px; }
+    input,select,textarea { width:100%; border:1px solid #d5dbe5; border-radius:9px; padding:11px 12px; font-size:15px; background:white; }
+    textarea { min-height:80px; resize:vertical; }
+    .checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .check { display:flex; align-items:center; gap:8px; font-weight:600; }
+    .check input { width:auto; }
+    button { border:0; border-radius:10px; padding:13px 18px; font-weight:700; font-size:16px; cursor:pointer; }
+    .primary { background:var(--navy); color:white; width:100%; }
+    .secondary { background:#e9edf3; color:var(--navy); }
+    button:disabled { opacity:.55; cursor:wait; }
+    .notice { padding:12px 14px; border-radius:9px; margin-bottom:14px; display:none; }
+    .error { background:#fdecec; color:var(--danger); }
+    .success { background:#eaf8f1; color:var(--ok); }
+    .estimate { text-align:center; padding:22px; border:2px solid var(--gold); border-radius:13px; }
+    .estimate .value { font-size:38px; font-weight:800; color:var(--navy); margin:7px 0; }
+    .range { font-size:17px; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px; }
+    .stat { background:#f3f5f8; padding:14px; border-radius:10px; text-align:center; }
+    .stat strong { display:block; font-size:20px; margin-top:4px; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
+    th,td { padding:9px; border-bottom:1px solid #e4e7ec; text-align:left; }
+    .hidden { display:none !important; }
+    .small { color:var(--muted); font-size:13px; line-height:1.45; }
+    .seller-box { border:2px solid var(--navy); }
+    .compare { margin-top:12px; padding:14px; border-radius:10px; background:#f3f5f8; }
+    @media (max-width:700px) { .grid,.stats,.checks { grid-template-columns:1fr; } .full { grid-column:auto; } .estimate .value { font-size:30px; } }
   </style>
 </head>
-
 <body>
-
 <header>
   <h1>JML Immobilier</h1>
   <p>Estimateur immobilier professionnel</p>
 </header>
 
 <main>
+  <div id="error" class="notice error"></div>
+  <div id="success" class="notice success"></div>
 
-  <div class="card">
+  <section class="card">
     <h2>🏠 Informations du bien</h2>
-
-    <div id="error" class="error"></div>
-
     <div class="grid">
-
       <div class="full">
-        <label>Adresse du bien *</label>
-        <input id="address" placeholder="Exemple : 12 rue de la République, Charleville-Mézières">
+        <label for="address">Adresse du bien *</label>
+        <input id="address" placeholder="Ex. 6 rue ... 08000 Charleville-Mézières">
       </div>
 
       <div>
-        <label>Type de bien</label>
+        <label for="realtyType">Type de bien *</label>
         <select id="realtyType">
           <option value="house">Maison</option>
           <option value="apartment">Appartement</option>
@@ -203,418 +71,265 @@
       </div>
 
       <div>
-        <label>Surface habitable (m²) *</label>
-        <input id="livingArea" type="number" min="1">
+        <label for="livingArea">Surface habitable (m²) *</label>
+        <input id="livingArea" type="number" min="1" step="0.1">
       </div>
 
       <div>
-        <label>Terrain (m²)</label>
-        <input id="landArea" type="number" min="0">
+        <label for="landArea">Terrain (m²)</label>
+        <input id="landArea" type="number" min="0" step="1">
       </div>
 
       <div>
-        <label>Nombre de pièces</label>
-        <input id="nbRooms" type="number" min="0">
+        <label for="nbRooms">Nombre de pièces *</label>
+        <input id="nbRooms" type="number" min="1" max="15" step="1">
       </div>
 
       <div>
-        <label>Nombre de salles de bains</label>
-        <input id="bathrooms" type="number" min="0">
+        <label for="bathrooms">Nombre de salles de bains</label>
+        <input id="bathrooms" type="number" min="0" max="5" step="1" value="0">
       </div>
 
       <div>
-        <label>Année de construction</label>
-        <input id="constructionYear" type="number" min="1800" max="2100">
+        <label for="constructionYear">Année de construction</label>
+        <input id="constructionYear" type="number" min="0" max="2026" placeholder="Ex. 1960">
       </div>
 
       <div>
-        <label>DPE</label>
+        <label for="dpe">DPE</label>
         <select id="dpe">
           <option value="">Non renseigné</option>
-          <option>A>A</option>
-          <option>B>B</option>
-          <option>C>C</option>
-          <option>D>D</option>
-          <option>E>E</option>
-          <option>F>F</option>
-          <option>G>G</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+          <option value="F">F</option>
+          <option value="G">G</option>
         </select>
       </div>
 
       <div>
-        <label>État du bien</label>
+        <label for="condition">État du bien</label>
         <select id="condition">
           <option value="">Non renseigné</option>
-          <option value="new">Neuf</option>
-          <option value="good">Bon état</option>
-          <option value="average">État moyen</option>
-          <option value="to renovate">À rénover</option>
+          <option value="excellent">Excellent / neuf</option>
+          <option value="standard">Bon état / standard</option>
+          <option value="renovate">À rénover</option>
         </select>
       </div>
 
       <div>
-        <label>Chauffage</label>
-        <input id="heating" placeholder="Gaz, électrique, fioul...">
+        <label for="heating">Chauffage</label>
+        <input id="heating" placeholder="Ex. Gaz, électrique, pompe à chaleur">
       </div>
 
       <div class="full">
-        <label>Équipements</label>
-
+        <label>Équipements et caractéristiques</label>
         <div class="checks">
-          <label><input id="garage" type="checkbox"> Garage</label>
-          <label><input id="parking" type="checkbox"> Parking</label>
-          <label><input id="cellar" type="checkbox"> Cave</label>
-          <label><input id="terrace" type="checkbox"> Terrasse</label>
-          <label><input id="patio" type="checkbox"> Jardin / cour</label>
-          <label><input id="niceView" type="checkbox"> Belle vue</label>
+          <label class="check"><input type="checkbox" id="garage"> Garage</label>
+          <label class="check"><input type="checkbox" id="parking"> Parking</label>
+          <label class="check"><input type="checkbox" id="cellar"> Cave</label>
+          <label class="check"><input type="checkbox" id="terrace"> Terrasse / balcon</label>
+          <label class="check"><input type="checkbox" id="garden"> Jardin / cour</label>
+          <label class="check"><input type="checkbox" id="niceView"> Belle vue</label>
+          <label class="check"><input type="checkbox" id="pool"> Piscine</label>
         </div>
+        <p class="small">Les caractéristiques non prises en charge directement par Immo Data restent enregistrées pour le dossier, mais ne modifient pas artificiellement l'estimation.</p>
       </div>
 
       <div class="full">
-        <label>Travaux / observations</label>
-        <textarea id="works" placeholder="Travaux récents, travaux à prévoir, particularités..."></textarea>
+        <label for="works">Travaux / observations</label>
+        <textarea id="works" placeholder="Travaux à prévoir, rénovation récente, environnement, nuisances, prestations..."></textarea>
       </div>
 
+      <div class="full">
+        <button id="estimateBtn" class="primary">Lancer l’estimation indépendante</button>
+        <p class="small">Le prix que le vendeur souhaite obtenir n'est pas demandé et n'est pas transmis avant l'estimation.</p>
+      </div>
     </div>
+  </section>
 
-    <br>
-
-    <button id="analyzeBtn" onclick="analyze()">
-      🔎 Lancer l'estimation
-    </button>
-
-    <div id="loading" class="success">
-      ⏳ Analyse du marché en cours...<br>
-      Géolocalisation du bien et recherche des données Immo Data.
-    </div>
-  </div>
-
-
-  <div id="results" class="card">
-
+  <section id="results" class="card hidden">
     <h2>📊 Résultat de l'estimation</h2>
 
-    <div id="matchedAddress" class="success"></div>
-
     <div class="estimate">
-      <span>Valeur estimative</span>
-      <strong id="estimate">—</strong>
-      <div class="range" id="range">Fourchette : —</div>
+      <div>Valeur estimée</div>
+      <div id="mainValuation" class="value">—</div>
+      <div id="range" class="range">Fourchette : —</div>
+      <div id="confidence" class="small">Confiance : —</div>
     </div>
 
-    <div class="info">
-      <div>
-        <b>Prix au m²</b><br>
-        <span id="sqm">—</span>
-      </div>
-
-      <div>
-        <b>Confiance</b><br>
-        <span id="confidence">—</span>
-      </div>
-
-      <div>
-        <b>Prix moyen du marché</b><br>
-        <span id="market">—</span>
-      </div>
-
-      <div>
-        <b>Durée moyenne de vente</b><br>
-        <span id="duration">—</span>
-      </div>
-
-      <div>
-        <b>Transactions comparables</b><br>
-        <span id="transactions">—</span>
-      </div>
-
-      <div>
-        <b>Commune</b><br>
-        <span id="city">—</span>
-      </div>
+    <div class="stats">
+      <div class="stat">Prix du marché local<strong id="marketPrice">—</strong></div>
+      <div class="stat">Durée moyenne de vente<strong id="saleDuration">—</strong></div>
+      <div class="stat">Adresse retenue<strong id="matchedAddress">—</strong></div>
     </div>
 
-  </div>
+    <div style="margin-top:18px">
+      <h2>🔎 Transactions comparables</h2>
+      <div id="comparables">—</div>
+    </div>
+  </section>
 
+  <section id="sellerSection" class="card seller-box hidden">
+    <h2>💬 Maintenant, le prix du vendeur</h2>
+    <p>Le calcul de marché vient d'être effectué indépendamment. Vous pouvez maintenant demander au vendeur :</p>
+    <p><strong>« Quel prix aviez-vous en tête pour votre bien ? »</strong></p>
 
-  <div id="sellerBox" class="card">
-
-    <h2>💬 Maintenant, parlons de votre prix</h2>
-
-    <p>
-      L'estimation de marché a été réalisée indépendamment.
-      <br><br>
-      <b>Quel prix aviez-vous en tête pour votre bien ?</b>
-    </p>
-
-    <input id="sellerPrice" type="number" min="0" placeholder="Exemple : 250000">
-
-    <br><br>
-
-    <button onclick="comparePrice()">
-      Comparer mon prix à l'estimation
-    </button>
-
-    <br><br>
-
-    <div id="comparison"></div>
-
-  </div>
-
+    <label for="sellerPrice">Prix souhaité par le vendeur (€)</label>
+    <input id="sellerPrice" type="number" min="0" step="1000" placeholder="Ex. 220000">
+    <button id="compareBtn" class="secondary" style="margin-top:12px">Comparer avec l’estimation</button>
+    <div id="comparison" class="compare hidden"></div>
+  </section>
 </main>
 
-
 <script>
+  const $ = (id) => document.getElementById(id);
+  let lastResult = null;
 
-function valueFrom(obj, keys) {
-  for (const key of keys) {
-    if (obj && obj[key] !== undefined && obj[key] !== null) {
-      return obj[key];
-    }
-  }
-  return null;
-}
-
-function euros(value) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
+  function showError(message) {
+    $("success").style.display = "none";
+    $("error").textContent = message;
+    $("error").style.display = "block";
+    window.scrollTo({top:0, behavior:"smooth"});
   }
 
-  const n = Number(value);
-
-  if (!Number.isFinite(n)) {
-    return String(value);
+  function showSuccess(message) {
+    $("error").style.display = "none";
+    $("success").textContent = message;
+    $("success").style.display = "block";
   }
 
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0
-  }).format(n);
-}
+  function euro(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+    return new Intl.NumberFormat("fr-FR", {style:"currency", currency:"EUR", maximumFractionDigits:0}).format(Number(value));
+  }
 
-function number(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
+  function number(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
 
-async function analyze() {
-
-  const error = document.getElementById("error");
-  const loading = document.getElementById("loading");
-  const results = document.getElementById("results");
-  const sellerBox = document.getElementById("sellerBox");
-  const button = document.getElementById("analyzeBtn");
-
-  error.style.display = "none";
-  results.style.display = "none";
-  sellerBox.style.display = "none";
-  loading.style.display = "block";
-  button.disabled = true;
-
-  const payload = {
-    address: document.getElementById("address").value.trim(),
-    realtyType: document.getElementById("realtyType").value,
-    livingArea: number(document.getElementById("livingArea").value),
-    landArea: number(document.getElementById("landArea").value),
-    nbRooms: number(document.getElementById("nbRooms").value),
-    bathrooms: number(document.getElementById("bathrooms").value),
-    constructionYear: number(document.getElementById("constructionYear").value),
-    dpe: document.getElementById("dpe").value,
-    condition: document.getElementById("condition").value,
-    heating: document.getElementById("heating").value,
-    garage: document.getElementById("garage").checked,
-    parking: document.getElementById("parking").checked,
-    cellar: document.getElementById("cellar").checked,
-    terrace: document.getElementById("terrace").checked,
-    patio: document.getElementById("patio").checked,
-    niceView: document.getElementById("niceView").checked,
-    works: document.getElementById("works").value
-  };
-
-  try {
-
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Une erreur est survenue.");
+  function displayTransactions(items) {
+    if (!Array.isArray(items) || !items.length) {
+      return '<p class="small">Aucune transaction comparable retournée par l’API pour ces critères.</p>';
     }
 
-    const valuation = data.valuation || {};
+    const rows = items.slice(0,10).map(tx => {
+      const sqm = tx.price && tx.livingArea ? Math.round(tx.price / tx.livingArea) : null;
+      return `<tr>
+        <td>${tx.date ? String(tx.date).slice(0,10) : "—"}</td>
+        <td>${euro(tx.price)}</td>
+        <td>${tx.livingArea ?? "—"} m²</td>
+        <td>${tx.landArea ?? "—"} m²</td>
+        <td>${sqm ? euro(sqm) + "/m²" : "—"}</td>
+      </tr>`;
+    }).join("");
 
-    const estimate = valueFrom(valuation, [
-      "mainValuation",
-      "valuation",
-      "value",
-      "estimatedValue",
-      "price"
-    ]);
+    return `<table>
+      <thead><tr><th>Date</th><th>Prix</th><th>Surface</th><th>Terrain</th><th>Prix/m²</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
 
-    const low = valueFrom(valuation, [
-      "lowerValuation",
-      "lowValuation",
-      "lowerValue",
-      "minValue"
-    ]);
+  function renderResult(data) {
+    lastResult = data;
+    const v = data.valuation || {};
 
-    const high = valueFrom(valuation, [
-      "upperValuation",
-      "highValuation",
-      "upperValue",
-      "maxValue"
-    ]);
+    $("mainValuation").textContent = euro(v.mainValuation);
+    $("range").textContent = `Fourchette : ${euro(v.lowerValuation)} à ${euro(v.upperValuation)}`;
+    $("confidence").textContent = `Niveau de confiance Immo Data : ${v.confidence ?? "—"} / 5`;
 
-    const confidence = valueFrom(valuation, [
-      "confidence",
-      "confidenceScore"
-    ]);
+    const mp = data.marketPrice;
+    $("marketPrice").textContent = mp?.value != null ? `${euro(mp.value)} / m²` : "Non disponible";
 
-    const sqm = estimate && payload.livingArea
-      ? Number(estimate) / payload.livingArea
-      : null;
+    const sd = data.saleDuration;
+    $("saleDuration").textContent = sd?.value != null ? `${sd.value} jours` : "Non disponible";
 
-    document.getElementById("estimate").textContent = euros(estimate);
+    $("matchedAddress").textContent = data.property?.matchedAddress || data.property?.address || "—";
 
-    document.getElementById("range").textContent =
-      "Fourchette : " +
-      euros(low) +
-      " → " +
-      euros(high);
+    $("comparables").innerHTML = displayTransactions(data.transactions);
 
-    document.getElementById("sqm").textContent =
-      sqm ? Math.round(sqm) + " €/m²" : "—";
+    $("results").classList.remove("hidden");
+    $("sellerSection").classList.remove("hidden");
+    $("comparison").classList.add("hidden");
+    $("sellerPrice").value = "";
 
-    document.getElementById("confidence").textContent =
-      confidence !== null
-        ? confidence + " / 5"
-        : "—";
+    showSuccess("Estimation réalisée indépendamment du prix souhaité par le vendeur.");
+    $("results").scrollIntoView({behavior:"smooth"});
+  }
 
-    const market = valueFrom(
-      data.marketPrice,
-      ["value", "price", "sqmPrice", "squareMeterPrice"]
-    );
+  $("estimateBtn").addEventListener("click", async () => {
+    const button = $("estimateBtn");
+    button.disabled = true;
+    button.textContent = "Analyse en cours…";
 
-    document.getElementById("market").textContent =
-      market ? Math.round(Number(market)) + " €/m²" : "—";
+    try {
+      const payload = {
+        address: $("address").value.trim(),
+        realtyType: $("realtyType").value,
+        livingArea: number($("livingArea").value),
+        landArea: number($("landArea").value),
+        nbRooms: number($("nbRooms").value),
+        bathrooms: number($("bathrooms").value),
+        constructionYear: number($("constructionYear").value),
+        dpe: $("dpe").value,
+        condition: $("condition").value,
+        heating: $("heating").value.trim(),
+        garage: $("garage").checked,
+        parking: $("parking").checked,
+        cellar: $("cellar").checked,
+        terrace: $("terrace").checked,
+        garden: $("garden").checked,
+        niceView: $("niceView").checked,
+        pool: $("pool").checked,
+        works: $("works").value.trim()
+      };
 
-    const duration = valueFrom(
-      data.saleDuration,
-      ["value", "days", "duration"]
-    );
+      const response = await fetch("/api/analyze", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
 
-    document.getElementById("duration").textContent =
-      duration ? Math.round(Number(duration)) + " jours" : "—";
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
 
-    const transactions = data.transactions;
+      renderResult(data);
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Lancer l’estimation indépendante";
+    }
+  });
 
-    let count = "—";
+  $("compareBtn").addEventListener("click", () => {
+    if (!lastResult?.valuation) return;
 
-    if (Array.isArray(transactions?.data)) {
-      count = transactions.data.length;
+    const seller = number($("sellerPrice").value);
+    const estimate = number(lastResult.valuation.mainValuation);
+
+    if (!seller || seller <= 0) {
+      showError("Saisissez le prix souhaité par le vendeur.");
+      return;
+    }
+    if (!estimate) {
+      showError("L’estimation n’est pas disponible.");
+      return;
     }
 
-    document.getElementById("transactions").textContent = count;
+    const difference = seller - estimate;
+    const percent = (difference / estimate) * 100;
+    const text = difference >= 0
+      ? `Le prix vendeur est supérieur à l’estimation de ${euro(Math.abs(difference))} (${Math.abs(percent).toFixed(1)} %).`
+      : `Le prix vendeur est inférieur à l’estimation de ${euro(Math.abs(difference))} (${Math.abs(percent).toFixed(1)} %).`;
 
-    document.getElementById("city").textContent =
-      data.property?.cityName || "—";
-
-    document.getElementById("matchedAddress").textContent =
-      "📍 Adresse analysée : " +
-      (data.property?.matchedAddress || payload.address);
-
-    results.style.display = "block";
-
-    // Le prix vendeur n'apparaît qu'après l'estimation.
-    sellerBox.style.display = "block";
-
-    sellerBox.scrollIntoView({
-      behavior: "smooth"
-    });
-
-  } catch (err) {
-
-    error.textContent = "❌ " + err.message;
-    error.style.display = "block";
-
-  } finally {
-
-    loading.style.display = "none";
-    button.disabled = false;
-
-  }
-}
-
-
-function comparePrice() {
-
-  const seller = number(
-    document.getElementById("sellerPrice").value
-  );
-
-  const estimateText =
-    document.getElementById("estimate").textContent;
-
-  const estimate = Number(
-    estimateText
-      .replace(/[^\d,.-]/g, "")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-  );
-
-  const comparison =
-    document.getElementById("comparison");
-
-  if (!seller) {
-    comparison.innerHTML =
-      "<div class='error' style='display:block'>Indiquez votre prix.</div>";
-    return;
-  }
-
-  if (!estimate || !Number.isFinite(estimate)) {
-    comparison.innerHTML =
-      "<div class='error' style='display:block'>L'estimation n'est pas disponible.</div>";
-    return;
-  }
-
-  const difference = seller - estimate;
-  const percent = (difference / estimate) * 100;
-
-  let message;
-
-  if (difference > 0) {
-    message =
-      "Votre prix est de " +
-      euros(Math.abs(difference)) +
-      " au-dessus de l'estimation de marché.";
-  } else if (difference < 0) {
-    message =
-      "Votre prix est de " +
-      euros(Math.abs(difference)) +
-      " en dessous de l'estimation de marché.";
-  } else {
-    message =
-      "Votre prix correspond à l'estimation de marché.";
-  }
-
-  comparison.innerHTML = `
-    <div class="success">
-      <b>Votre prix :</b> ${euros(seller)}<br>
-      <b>Estimation :</b> ${euros(estimate)}<br>
-      <b>Écart :</b> ${percent.toFixed(1)} %<br><br>
-      ${message}
-    </div>
-  `;
-}
-
+    $("comparison").innerHTML = `<strong>Estimation marché :</strong> ${euro(estimate)}<br>
+      <strong>Prix vendeur :</strong> ${euro(seller)}<br><br>${text}`;
+    $("comparison").classList.remove("hidden");
+  });
 </script>
-
 </body>
 </html>
