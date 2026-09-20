@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: jml-estimateur
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MOCK_API_MODE
+        value: "true"
+      - key: NODE_VERSION
+        value: "20"
