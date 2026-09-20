@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>JML Immobilier - Estimateur Ardennes</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #172033;
+}
+
+header {
+    background: #173b2b;
+    color: white;
+    padding: 22px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 23px;
+}
+
+header p {
+    margin: 6px 0 0;
+    opacity: 0.85;
+}
+
+main {
+    max-width: 900px;
+    margin: 25px auto;
+    padding: 0 15px;
+}
+
+.card {
+    background: white;
+    padding: 22px;
+    margin-bottom: 18px;
+    border-radius: 16px;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+}
+
+h2 {
+    margin-top: 0;
+    font-size: 19px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.full {
+    grid-column: 1 / -1;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccd4dc;
+    border-radius: 9px;
+    font-size: 15px;
+}
+
+textarea {
+    min-height: 90px;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    margin-top: 18px;
+    border: none;
+    border-radius: 10px;
+    background: #173b2b;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+button:active {
+    transform: scale(0.99);
+}
+
+.result {
+    display: none;
+}
+
+.price {
+    font-size: 38px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.range {
+    color: #64748b;
+    font-size: 16px;
+}
+
+.info {
+    background: #f1f5f9;
+    padding: 14px;
+    border-radius: 9px;
+    margin-top: 15px;
+}
+
+.owner {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.comparison {
+    margin-top: 15px;
+    padding: 15px;
+    background: #eef6f0;
+    border-radius: 10px;
+    display: none;
+}
+
+.error {
+    margin-top: 15px;
+    padding: 12px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 8px;
+}
+
+@media (max-width: 650px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .full {
+        grid-column: auto;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🏠 JML Immobilier</h1>
+    <p>Estimateur immobilier — Ardennes</p>
+</header>
+
+<main>
+
+<div class="card">
+
+<h2>📍 Identification du bien</h2>
+
+<div class="grid">
+
+<div class="full">
+<label>Adresse du bien</label>
+<input
+    id="address"
+    type="text"
+    placeholder="Ex. 15 rue de la République, 08000 Charleville-Mézières">
+</div>
+
+<div>
+<label>Latitude</label>
+<input
+    id="latitude"
+    type="number"
+    step="any"
+    placeholder="Latitude">
+</div>
+
+<div>
+<label>Longitude</label>
+<input
+    id="longitude"
+    type="number"
+    step="any"
+    placeholder="Longitude">
+</div>
+
+<div>
+<label>Code INSEE</label>
+<input
+    id="cityCode"
+    type="text"
+    placeholder="Ex. 08105">
+</div>
+
+<div>
+<label>Type de bien</label>
+<select id="realtyType">
+    <option value="house">Maison</option>
+    <option value="apartment">Appartement</option>
+</select>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2>🏠 Caractéristiques du bien</h2>
+
+<div class="grid">
+
+<div>
+<label>Surface habitable (m²)</label>
+<input
+    id="livingArea"
+    type="number"
+    min="1"
+    placeholder="125">
+</div>
+
+<div>
+<label>Surface du terrain (m²)</label>
+<input
+    id="landArea"
+    type="number"
+    min="0"
+    placeholder="650">
+</div>
+
+<div>
+<label>Nombre de pièces</label>
+<input
+    id="nbRooms"
+    type="number"
+    min="1"
+    placeholder="5">
+</div>
+
+<div>
+<label>Salles de bains / eau</label>
+<input
+    id="bathrooms"
+    type="number"
+    min="0"
+    placeholder="2">
+</div>
+
+<div>
+<label>Année de construction</label>
+<input
+    id="constructionYear"
+    type="number"
+    placeholder="1985">
+</div>
+
+<div>
+<label>DPE</label>
+<select id="dpe">
+    <option value="">Non renseigné</option>
+    <option value="A">A</option>
+    <option value="B">B</option>
+    <option value="C">C</option>
+    <option value="D">D</option>
+    <option value="E">E</option>
+    <option value="F">F</option>
+    <option value="G">G</option>
+</select>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2>✨ Équipements</h2>
+
+<div class="grid">
+
+<label>
+<input type="checkbox" id="garage">
+Garage
+</label>
+
+<label>
+<input type="checkbox" id="parking">
+Parking
+</label>
+
+<label>
+<input type="checkbox" id="cellar">
+Cave
+</label>
+
+<label>
+<input type="checkbox" id="terrace">
+Terrasse
+</label>
+
+<label>
+<input type="checkbox" id="garden">
+Jardin
+</label>
+
+<label>
+<input type="checkbox" id="niceView">
+Belle vue
+</label>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2>🛠️ État du bien</h2>
+
+<div class="grid">
+
+<div>
+<label>État général</label>
+
+<select id="state">
+    <option>Excellent</option>
+    <option>Très bon</option>
+    <option>Bon</option>
+    <option>À rafraîchir</option>
+    <option>Travaux importants</option>
+</select>
+
+</div>
+
+<div>
+<label>Chauffage</label>
+
+<select id="heating">
+    <option>Gaz</option>
+    <option>Électricité</option>
+    <option>Fioul</option>
+    <option>Bois</option>
+    <option>Pompe à chaleur</option>
+    <option>Autre</option>
+</select>
+
+</div>
+
+<div class="full">
+
+<label>Travaux / observations</label>
+
+<textarea
+id="works"
+placeholder="Travaux récents, travaux à prévoir, prestations particulières..."></textarea>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="info">
+
+🔐 <strong>Important :</strong>
+
+Le prix que le propriétaire a en tête n'est volontairement pas demandé maintenant.
+
+L'estimation sera réalisée avant de connaître son prix.
+
+</div>
+
+<button onclick="analyser()">
+🔎 ANALYSER LE BIEN
+</button>
+
+<div id="error"></div>
+
+</div>
+
+
+<div class="card result" id="result">
+
+<h2>🎯 Estimation JML Immobilier</h2>
+
+<div class="price" id="mainPrice">
+—
+</div>
+
+<div class="range" id="range">
+Fourchette : —
+</div>
+
+<div class="info">
+
+<p>
+<strong>Niveau de confiance :</strong>
+<span id="confidence">—</span>
+</p>
+
+<p>
+<strong>Prix du secteur :</strong>
+<span id="marketPrice">—</span>
+</p>
+
+<p>
+<strong>Durée moyenne de vente :</strong>
+<span id="duration">—</span>
+</p>
+
+<p>
+<strong>Transactions comparables :</strong>
+<span id="transactions">—</span>
+</p>
+
+</div>
+
+
+<div class="owner">
+
+<h2>💬 Maintenant, une question pour le propriétaire</h2>
+
+<p>
+<strong>Quel prix aviez-vous en tête pour votre bien ?</strong>
+</p>
+
+<input
+    id="ownerPrice"
+    type="number"
+    placeholder="Prix envisagé en €">
+
+<button onclick="comparer()">
+📊 COMPARER LES DEUX PRIX
+</button>
+
+<div
+    class="comparison"
+    id="comparison">
+</div>
+
+</div>
+
+</div>
+
+</main>
+
+
+<script>
+
+let estimationJML = 0;
+
+
+/* ==========================
+   ANALYSE DU BIEN
+========================== */
+
+async function analyser() {
+
+    document.getElementById("error").innerHTML = "";
+
+    const latitude =
+        Number(document.getElementById("latitude").value);
+
+    const longitude =
+        Number(document.getElementById("longitude").value);
+
+    const livingArea =
+        Number(document.getElementById("livingArea").value);
+
+    if (!latitude || !longitude || !livingArea) {
