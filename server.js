@@ -21,6 +21,14 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function firstNumber(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n !== 0) return n;
+  }
+  return 0;
+}
+
 function isoDateMonthsAgo(months) {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
@@ -165,52 +173,54 @@ async function geocodeAddress(address) {
     geoLevel: "address,street,city,district",
     limit: 10
   });
-  const list = Array.isArray(rows) ? rows : (Array.isArray(rows.data) ? rows.data : []);
+
+  const list = Array.isArray(rows) ? rows : (Array.isArray(rows?.data) ? rows.data : []);
   if (!list.length) throw new Error("Adresse introuvable. Vérifie l'adresse saisie.");
 
-  const addressHit = list.find(x => x.geoLevel === "address") || list[0];
-  const center = Array.isArray(addressHit.center) ? addressHit.center : null;
-  const coordinates = addressHit.coordinates || null;
-  const lon = cleanNumber(addressHit.longitude ?? coordinates?.[0] ?? center?.[0]);
-  const lat = cleanNumber(addressHit.latitude ?? coordinates?.[1] ?? center?.[1]);
+  const addressHit = list.find(x => x?.geoLevel === "address") || list[0];
+  const cityHit = list.find(x => x?.geoLevel === "city") || {};
+  const districtHit = list.find(x => x?.geoLevel === "district") || {};
+  const addressMeta = addressHit?.address || addressHit || {};
+
+  const center = Array.isArray(addressHit?.center) ? addressHit.center : null;
+  const coordinates = Array.isArray(addressHit?.coordinates) ? addressHit.coordinates : null;
+  const lon = firstNumber(addressHit?.longitude, addressMeta?.longitude, coordinates?.[0], center?.[0]);
+  const lat = firstNumber(addressHit?.latitude, addressMeta?.latitude, coordinates?.[1], center?.[1]);
   if (!lat || !lon) throw new Error("L'adresse a été trouvée mais ses coordonnées GPS sont indisponibles.");
 
-  let city = list.find(x => x.geoLevel === "city" && x.inseeCode) || {};
-  let district = list.find(x => x.geoLevel === "district" && (x.districtCode || x.code)) || {};
-
-  const addressMeta = addressHit.address || addressHit;
-  const streetCode = addressHit.streetCode || addressMeta.streetCode;
-  const addressId = addressHit.addressId || addressMeta.addressId;
+  const cityCode = addressHit?.inseeCode || addressMeta?.inseeCode || cityHit?.inseeCode || cityHit?.code || "";
+  const districtCode = addressHit?.districtCode || addressMeta?.districtCode || districtHit?.districtCode || districtHit?.code || "";
+  const streetCode = addressHit?.streetCode || addressMeta?.streetCode || "";
 
   return {
     latitude: lat,
     longitude: lon,
-    label: addressHit.label || addressHit.name || address,
-    cityName: addressHit.cityName || city.cityName || "",
-    postCode: Array.isArray(addressHit.postCode) ? addressHit.postCode[0] : (addressHit.postCode || city.postCode?.[0] || ""),
-    cityCode: addressHit.inseeCode || city.inseeCode || "",
-    districtCode: addressHit.districtCode || district.districtCode || district.code || "",
-    districtName: addressHit.districtName || district.districtName || "",
+    label: addressHit?.label || addressHit?.name || address,
+    cityName: addressHit?.cityName || addressMeta?.cityName || cityHit?.cityName || cityHit?.name || "",
+    postCode: Array.isArray(addressHit?.postCode) ? addressHit.postCode[0] : (addressHit?.postCode || addressMeta?.postCode || cityHit?.postCode?.[0] || ""),
+    cityCode,
+    districtCode,
+    districtName: addressHit?.districtName || addressMeta?.districtName || districtHit?.districtName || districtHit?.name || "",
     streetCode,
-    addressId
+    addressId: addressHit?.addressId || addressMeta?.addressId || ""
   };
 }
-
 async function marketPrice(code, geoLevel, realtyType) {
   if (!code) return null;
   try {
-    return await immo("/v1/market/price/current", {
+    const raw = await immo("/v1/market/price/current", {
       code,
       geoLevel,
       marketType: "sales",
       realtyType,
       metric: "sqm_price"
     });
+    const value = firstNumber(raw?.value, raw?.data?.value);
+    return value ? { ...raw, value } : null;
   } catch (_) {
     return null;
   }
 }
-
 async function listingStats(subject, realtyType, dateMin) {
   try {
     return await immo("/v1/listings/statistics", {
@@ -235,36 +245,47 @@ async function listingStats(subject, realtyType, dateMin) {
   }
 }
 
-async function findComparables(subject, realtyType) {
-  const stages = [
-    { label: "Même secteur — 6 mois", radius: 500, months: 6 },
-    { label: "Quartier élargi — 6 mois", radius: 1000, months: 6 },
-    { label: "Quartier élargi — 12 mois", radius: 2000, months: 12 },
-    { label: "Secteur élargi — 24 mois", radius: 3000, months: 24 }
-  ];
+async function findComparables(subject, realtyType, geo) {
+  const stages = [];
+  if (geo?.streetCode) stages.push({ label: "Même rue — 6 mois", code: geo.streetCode, geoLevel: "street", months: 6, radius: 0 });
+  if (geo?.districtCode) stages.push({ label: "Même grand quartier — 6 mois", code: geo.districtCode, geoLevel: "district", months: 6, radius: 0 });
+  stages.push({ label: "Secteur — 6 mois", radius: 1000, months: 6 });
+  if (geo?.districtCode) stages.push({ label: "Même grand quartier — 12 mois", code: geo.districtCode, geoLevel: "district", months: 12, radius: 0 });
+  stages.push({ label: "Secteur élargi — 24 mois", radius: 3000, months: 24 });
 
   let selected = [];
   let usedStage = stages[stages.length - 1];
 
   for (const stage of stages) {
-    const raw = await immo("/v1/transactions", {
-      latitude: subject.latitude,
-      longitude: subject.longitude,
-      radius: stage.radius,
+    const params = {
       txType: "sales",
       realtyType,
       dateMin: isoDateMonthsAgo(stage.months),
       dateMax: new Date().toISOString().slice(0, 10),
-      livingAreaMin: Math.max(20, Math.round(subject.livingArea * 0.8)),
-      livingAreaMax: Math.round(subject.livingArea * 1.2),
-      minRoom: subject.rooms ? Math.max(1, subject.rooms - 1) : undefined,
-      maxRoom: subject.rooms ? subject.rooms + 1 : undefined,
-      landAreaMin: subject.landArea > 0 ? Math.max(1, Math.round(subject.landArea * 0.5)) : undefined,
-      landAreaMax: subject.landArea > 0 ? Math.round(subject.landArea * 1.5) : undefined,
+      livingAreaMin: Math.max(20, Math.round(subject.livingArea * 0.70)),
+      livingAreaMax: Math.round(subject.livingArea * 1.30),
+      minRoom: subject.rooms ? Math.max(1, subject.rooms - 2) : undefined,
+      maxRoom: subject.rooms ? subject.rooms + 2 : undefined,
       size: 100,
       sortBy: "date",
       sortOrder: "desc"
-    });
+    };
+    if (stage.code) {
+      params.code = stage.code;
+      params.geoLevel = stage.geoLevel;
+    } else {
+      params.latitude = subject.latitude;
+      params.longitude = subject.longitude;
+      params.radius = stage.radius;
+    }
+
+    let raw;
+    try {
+      raw = await immo("/v1/transactions", params);
+    } catch (e) {
+      console.warn("Comparables stage failed:", stage.label, e.message);
+      continue;
+    }
 
     const normalized = robustFilter(normalizeTransactions(raw, subject));
     selected = normalized;
@@ -281,7 +302,7 @@ async function findComparables(subject, realtyType) {
   return {
     total: selected.length,
     stage: usedStage.label,
-    radiusMeters: usedStage.radius,
+    radiusMeters: usedStage.radius || 0,
     months: usedStage.months,
     medianPpsm,
     weightedPpsm,
@@ -289,12 +310,11 @@ async function findComparables(subject, realtyType) {
     data: selected.slice(0, 12)
   };
 }
-
 function listingMedianPpsm(raw) {
-  const metric = raw?.data?.[0]?.metrics?.squareMeterPrice;
+  const metric = raw?.data?.[0]?.metrics?.squareMeterPrice || raw?.data?.[0]?.metrics?.sqmPrice;
   const p50 = metric?.percentiles?.find(x => Number(x.percentile) === 50)?.value;
   const mean = metric?.mean;
-  return cleanNumber(p50 || mean, 0) || null;
+  return firstNumber(p50, mean) || null;
 }
 
 function calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject }) {
@@ -307,7 +327,9 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   if (listPpsm) signals.push({ name: "Annonces actuellement en vente", value: listPpsm * subject.livingArea, weight: 0.05 });
 
   const totalWeight = signals.reduce((s, x) => s + x.weight, 0);
-  if (!totalWeight) throw new Error("Pas assez de données de marché pour calculer une estimation.");
+  if (!totalWeight) {
+    throw new Error("Aucune donnée de marché exploitable n'a été retournée. Vérifie la clé API et les crédits Immo Data.");
+  }
   const raw = signals.reduce((s, x) => s + x.value * x.weight, 0) / totalWeight;
   const main = round1000(raw);
 
@@ -401,13 +423,15 @@ app.post("/api/analyze", async (req, res) => {
     const cityPromise = marketPrice(geo.cityCode, "city", subject.realtyType);
     const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType);
     const listingsPromise = listingStats(subject, subject.realtyType, isoDateMonthsAgo(6));
+    const durationPromise = geo.cityCode ? immo("/v1/market/sale-duration/current", { code: geo.cityCode, geoLevel: "city", unit: "days" }).catch(() => null) : Promise.resolve(null);
 
-    const [valuation, cityPrice, districtPrice, listings, comparables] = await Promise.all([
+    const [valuation, cityPrice, districtPrice, listings, comparables, saleDuration] = await Promise.all([
       valuationPromise,
       cityPromise,
       districtPromise,
       listingsPromise,
-      findComparables(subject, subject.realtyType)
+      findComparables(subject, subject.realtyType, geo),
+      durationPromise
     ]);
 
     const final = calculateFinal({ valuation, cityPrice, districtPrice, listings, comparables, subject });
@@ -422,6 +446,7 @@ app.post("/api/analyze", async (req, res) => {
         cityCode: geo.cityCode,
         district: geo.districtName || "Grand quartier",
         districtCode: geo.districtCode,
+        streetCode: geo.streetCode,
         latitude: geo.latitude,
         longitude: geo.longitude,
         realtyType: subject.realtyType,
@@ -452,6 +477,7 @@ app.post("/api/analyze", async (req, res) => {
           count: listings.data?.[0]?.size || 0,
           medianPpsm: listingMedianPpsm(listings)
         } : null,
+        saleDuration: saleDuration?.value || null,
         comparables
       },
       method: {
