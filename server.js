@@ -515,9 +515,24 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   const totalWeight = scored.reduce((s, x) => s + x.rawWeight, 0);
   if (!totalWeight) throw new Error("Pas assez de données de marché pour calculer une estimation.");
 
-  const rawPpsm = scored.reduce((s, x) => s + x.ppsm * x.rawWeight, 0) / totalWeight;
-  const raw = rawPpsm * subject.livingArea;
-  const main = round1000(raw);
+  // V6 : le prix final est calculé à partir des mêmes valeurs et des mêmes
+  // poids que ceux affichés à l'utilisateur. Ainsi, le résultat est toujours
+  // reconstructible et ne dépend jamais de valeurs internes non affichées.
+  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
+  let weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
+  if (normalizedWeights.length) {
+    let maxIndex = 0;
+    for (let i = 1; i < scored.length; i++) {
+      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
+    }
+    normalizedWeights[maxIndex] += weightDelta;
+  }
+
+  const displayedValues = scored.map(s => round100(s.value));
+  const weightedDisplayedValue = displayedValues.reduce((sum, value, i) =>
+    sum + value * (normalizedWeights[i] / 100), 0
+  );
+  const main = round1000(weightedDisplayedValue);
 
   const spreadBase = confidenceDetails?.spread ?? 0.12;
   const apiSpread = valuation?.lowerValuation && valuation?.upperValuation && valuation.mainValuation
@@ -527,15 +542,13 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
   // de l'API, sans utiliser le prix souhaité du propriétaire.
   const spread = Math.min(0.22, Math.max(spreadBase, apiSpread));
 
-  const normalizedWeights = scored.map(s => Math.round((s.rawWeight / totalWeight) * 100));
-  const weightDelta = 100 - normalizedWeights.reduce((sum, w) => sum + w, 0);
-  if (normalizedWeights.length) {
-    let maxIndex = 0;
-    for (let i = 1; i < scored.length; i++) {
-      if (scored[i].rawWeight > scored[maxIndex].rawWeight) maxIndex = i;
-    }
-    normalizedWeights[maxIndex] += weightDelta;
-  }
+  const contributions = scored.map((s, i) => ({
+    key: s.key,
+    name: s.name,
+    value: displayedValues[i],
+    weight: normalizedWeights[i],
+    contribution: round100(displayedValues[i] * (normalizedWeights[i] / 100))
+  }));
 
   return {
     main,
@@ -548,8 +561,15 @@ function calculateFinal({ valuation, cityPrice, districtPrice, listings, compara
       weight: normalizedWeights[i],
       quality: s.quality,
       agreement: Math.round(s.agreementFactor * 100),
-      deviationPct: Math.round(s.deviation * 100)
+      deviationPct: Math.round(s.deviation * 100),
+      contribution: contributions[i].contribution
     })),
+    displayedCalculation: {
+      inputs: contributions,
+      totalWeight: normalizedWeights.reduce((sum, w) => sum + w, 0),
+      weightedTotal: round100(weightedDisplayedValue),
+      final: main
+    },
     spread
   };
 }
@@ -607,7 +627,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.5.1", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
+  res.json({ ok: true, version: "6.0.0", apiKeyConfigured: Boolean(API_KEY), mockMode: MOCK_API_MODE });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -700,7 +720,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.5.1",
+      version: "6.0.0",
       requestId,
       property: {
         address: geo.label || subject.address,
@@ -755,6 +775,7 @@ app.post("/api/analyze", async (req, res) => {
         filterMode: comparables.filterMode || null,
         filterReason: comparables.filterReason || null,
         sourceQuality: final.signals.map(s => ({ key: s.key, name: s.name, quality: s.quality, agreement: s.agreement, deviationPct: s.deviationPct, reason: s.reason })),
+        displayedCalculation: final.displayedCalculation,
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
           valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}${valuationResult.error.apiBody?.message ? ` (${valuationResult.error.apiBody.message})` : ""}.` : null
@@ -774,5 +795,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.5.1 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V6.0.0 sur http://localhost:${PORT}`);
 });
