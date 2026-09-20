@@ -441,7 +441,7 @@ function confidenceScore({ valuation, comparables, cityPrice, districtPrice, lis
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, version: "5.4.2", apiKeyConfigured: Boolean(API_KEY) });
+  res.json({ ok: true, version: "5.4.4", apiKeyConfigured: Boolean(API_KEY) });
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -474,32 +474,35 @@ app.post("/api/analyze", async (req, res) => {
     subject.latitude = geo.latitude;
     subject.longitude = geo.longitude;
 
-    const valuationPromise = immo("/v1/valuation", {
-      longitude: subject.longitude,
-      latitude: subject.latitude,
-      realtyType: subject.realtyType,
-      nbRooms: Math.max(1, subject.rooms || 1),
-      livingArea: subject.livingArea,
-      bathrooms: subject.bathrooms || 0,
-      landArea: subject.landArea || 0,
-      constructionYear: subject.constructionYear || 0,
-      ...(subject.dpe ? { dpe: subject.dpe } : {}),
-      condition: ({
-        excellent: 1,
-        very_good: 1,
-        good: 0,
-        refresh: -1,
-        major_work: -1
-      })[subject.condition] ?? 0,
-      parking: subject.parking,
-      garage: subject.garage,
-      cellar: subject.cellar,
-      niceView: subject.niceView,
-      patio: subject.patio,
-      terrace: subject.terrace
-    }).then(value => ({ value, error: null })).catch(error => ({ value: null, error: { status: error.status || null, message: error.message || "Erreur valuation" } }));
+    // V5.4.4 : requête /valuation volontairement minimale.
+    // La documentation Immo Data rend uniquement longitude, latitude, realtyType,
+    // nbRooms et livingArea obligatoires. Nous n'envoyons plus aucun champ
+    // facultatif à l'aveugle : cela évite qu'un seul paramètre optionnel invalide
+    // fasse tomber toute l'estimation avec un HTTP 400.
+    const valuationRooms = Math.min(15, Math.max(1, Math.round(subject.rooms || 1)));
+    const valuationArea = Math.min(10000, Math.max(1, Number(subject.livingArea)));
+    const valuationRealtyType = subject.realtyType === "apartment" ? "apartment" : "house";
+    const valuationParams = {
+      longitude: Number(subject.longitude),
+      latitude: Number(subject.latitude),
+      realtyType: valuationRealtyType,
+      nbRooms: valuationRooms,
+      livingArea: valuationArea
+    };
 
-    // V5.4.1 : budget strict de 4 appels max par analyse :
+    const valuationPromise = immo("/v1/valuation", valuationParams)
+      .then(value => ({ value, error: null, params: valuationParams }))
+      .catch(error => ({
+        value: null,
+        params: valuationParams,
+        error: {
+          status: error.status || null,
+          message: error.message || "Erreur valuation",
+          apiBody: error.apiBody || null
+        }
+      }));
+
+    // V5.4.4 : budget strict de 4 appels max par analyse :
     // 1 géocodage + 1 estimation + 1 prix quartier + 1 recherche transactions.
     // Les annonces et le prix commune sont désactivés par défaut pour éviter d'épuiser le solde.
     const districtPromise = marketPrice(geo.districtCode, "district", subject.realtyType);
@@ -518,7 +521,7 @@ app.post("/api/analyze", async (req, res) => {
     const confidence = confidenceDetails.rating;
 
     const result = {
-      version: "5.4.2",
+      version: "5.4.4",
       property: {
         address: geo.label || subject.address,
         city: geo.cityName,
@@ -570,7 +573,7 @@ app.post("/api/analyze", async (req, res) => {
         reliability: confidenceDetails,
         apiWarning: [
           comparables.unavailable ? `Source transactions indisponible : ${comparables.unavailableReason}.` : null,
-          valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}.` : null
+          valuationResult.error ? `Source estimation indisponible : ${valuationResult.error.message}${valuationResult.error.apiBody?.message ? ` (${valuationResult.error.apiBody.message})` : ""}.` : null
         ].filter(Boolean).join(" ") || null,
         note: "Mode économie API : 4 appels maximum par analyse (géocodage, estimation, quartier, transactions). Les annonces et la commune sont désactivées par défaut. Le classement des comparables est réalisé localement."
       },
@@ -586,5 +589,5 @@ app.post("/api/analyze", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`JML Estimateur V5.4.2 sur http://localhost:${PORT}`);
+  console.log(`JML Estimateur V5.4.3 sur http://localhost:${PORT}`);
 });
