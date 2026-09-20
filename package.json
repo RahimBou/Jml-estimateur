@@ -1,8 +1,8 @@
 {
   "name": "jml-estimateur-v5",
-  "version": "6.0.0",
+  "version": "5.5.1",
   "private": true,
-  "description": "Estimateur immobilier JML — mode économie API, comparables DVF et fiabilité multi-critères",
+  "description": "Estimateur immobilier JML — V5.5.1 mode gratuit permanent, sans appels API payants",
   "scripts": {"start": "node server.js"},
   "engines": {"node": ">=18"},
   "dependencies": {"express": "^4.21.2"}
