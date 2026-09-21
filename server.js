@@ -581,7 +581,7 @@ function extractCompetitionCity(rawAddress){
   if(postal){
     // Format : "08000 Charleville-Mézières - quartier".
     const after=raw.match(/\b\d{5}\s+(.+?)(?:\s+-\s+|$)/);
-    if(after&&after[1])return after[1].trim();
+    if(after&&after[1]&&!after[1].trim().startsWith('-'))return after[1].trim();
     const before=raw.slice(0,postal.index).replace(/[,:\-]+\s*$/,'').trim();
     // Format : "25 rue ... Charleville-Mézières 08000 - quartier".
     const hyphenCity=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+(?:-[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)?)$/);
