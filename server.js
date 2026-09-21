@@ -450,8 +450,10 @@ function extractCompetitionListing(html,url){
 async function importCompetitionListing(url){
   let u;
   try{u=new URL(String(url||''));}catch{throw Error('URL d’annonce invalide.');}
-  if(!['http:','https:'].includes(u.protocol)||!competitionHostAllowed(u.hostname)){
-    throw Error('Pour sécurité, seules les annonces de Leboncoin, SeLoger, Bien’ici, Logic-Immo ou PAP sont acceptées.');
+  const host=u.hostname.toLowerCase();
+  const knownAgency=agencyHostAllowed(host);
+  if(!['http:','https:'].includes(u.protocol)||(!competitionHostAllowed(host)&&!knownAgency)){
+    throw Error('URL d’annonce non autorisée.');
   }
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
   try{
@@ -629,20 +631,24 @@ async function searchCompetitionListings(input){
   }[input.realtyType]||'immobilier';
 
   const portals=['seloger.com','leboncoin.fr','bienici.com','logic-immo.com','pap.fr'];
+  // Base locale connue + découverte dynamique : on ne limite pas la couverture à
+  // une poignée d'agences. La recherche est relancée par commune et peut découvrir
+  // de nouveaux domaines d'agences sans modifier le moteur DVF.
   const agencies=[
-    'jml-immobilier.fr',
-    'fischer-immobilier.fr',
-    'agence-ing.fr',
-    'sassi-immobilier.fr',
-    'justimmo08.fr',
-    'ill-immobilier.fr',
-    'rimbaudimmo.fr',
+    'jml-immobilier.fr','fischer-immobilier.fr','agence-ing.fr','sassi-immobilier.fr',
+    'justimmo08.fr','ill-immobilier.fr','rimbaudimmo.fr',
     'charlevillemezieres.stephaneplazaimmobilier.com',
-    'charleville-mezieres.guy-hoquet.com',
-    'guy-hoquet.com',
-    'citya.com',
+    'charleville-mezieres.guy-hoquet.com','guy-hoquet.com','citya.com',
     'charleville-arthurimmo.com'
   ];
+  const ardennesTowns=[
+    'Charleville-Mézières','Sedan','Rethel','Givet','Revin','Vouziers',
+    'Nouzonville','Bogny-sur-Meuse','Fumay','Villers-Semeuse','Monthermé',
+    'Carignan','Bazeilles','Donchery','Rocroi','Vireux-Wallerand','Asfeld',
+    'Attigny','Signy-le-Petit','Renwez','La Francheville','Prix-lès-Mézières',
+    'Aiglemont','Haybes','Floing','Raucourt-et-Flaba','Juniville','Rethel'
+  ];
+  const towns=[city,...ardennesTowns.filter(x=>norm(x)!==norm(city))].slice(0,18);
 
   const queries=[];
   // Portails : conservés comme source complémentaire.
@@ -650,17 +656,31 @@ async function searchCompetitionListings(input){
     queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
     queries.push(['site:'+domain,'"'+city+'"',typeLabel].join(' '));
   }
-  // Agences : recherche directe dans leurs propres vitrines.
+  // Agences connues : recherche directe dans leurs propres vitrines.
   for(const domain of agencies){
     queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
     queries.push(['site:'+domain,'"'+city+'"',typeLabel].join(' '));
+  }
+  // Découverte départementale : recherche des sites d'agences dans chaque bassin.
+  for(const town of towns){
+    queries.push(['"'+town+'"','agence immobilière',typeLabel,'vente','-leboncoin','-seloger','-bienici','-logic-immo','-pap'].join(' '));
+    queries.push(['"'+town+'"','agence immobilière','annonces',typeLabel,'-leboncoin','-seloger','-bienici','-logic-immo','-pap'].join(' '));
   }
 
   const searchBatches=await Promise.all(queries.map(q=>searchWebLinks(q).catch(()=>[])));
   const found=[];
   for(const links of searchBatches){
     for(const l of links){
-      try{if(!competitionHostAllowed(new URL(l.url).hostname))continue}catch{continue}
+      let parsedUrl;
+      try{parsedUrl=new URL(l.url);}catch{continue}
+      const host=parsedUrl.hostname.toLowerCase();
+      const knownAgency=agencyHostAllowed(host);
+      const context=norm(String(l.title||'')+' '+String(l.snippet||''));
+      const looksLikeAgency=/(agence immobili|immobilier|transaction|vente immobili|cabinet immobilier|mandataire)/.test(context);
+      const allowedPortal=competitionHostAllowed(host);
+      if(!knownAgency && !allowedPortal && !looksLikeAgency)continue;
+      // Écarter les annuaires et intermédiaires : on veut la vitrine de l'agence.
+      if(!knownAgency && !allowedPortal && /(pagesjaunes|seloger|meilleursagents|societe\.com|thervy|immoplanete)/.test(host))continue;
       if(found.some(x=>x.url===l.url))continue;
       found.push(l);
       if(found.length>=60)break;
