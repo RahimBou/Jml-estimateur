@@ -20,3 +20,4 @@ jobs:
       - run: node tests/real-dvf-matrix.js
       - run: node tests/model-benchmark.js
       - run: node tests/consolidation-audit.js
+      - run: node tests/outlier-benchmark.js
