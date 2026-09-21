@@ -15,4 +15,5 @@ jobs:
           node-version: 20
       - run: npm install
       - run: node tests/selftest.js
+      - run: node tests/matrix-selftest.js
       - run: node tests/real-dvf-smoke.js
