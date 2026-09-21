@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.2 — DVF réelles · cœur de comparabilité · calibration transparente · écart fixe ±7 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.3 — DVF réelles · surface hiérarchisée · rue comparable · calibration transparente · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     adjBox.appendChild(p2);
     const p3=document.createElement('p');
     p3.textContent=(chars.note || 'Les caractéristiques absentes des données DVF ne sont pas transformées en pourcentages arbitraires.') +
-      ' V1.2 : lorsqu’il existe au moins 3 ventes DVF suffisamment proches en surface et à moins de 750 m, ce cœur de comparabilité devient le socle ; les autres ventes restent des contrôles de cohérence.';
+      ' V1.3 : la surface proche est hiérarchisée : une vente quasi identique en surface pèse davantage qu’une surface simplement admissible ; un bonus de rue est appliqué uniquement si le nom de rue est identifiable dans l’adresse saisie.';
     adjBox.appendChild(p3);
     const warning=$('warning');
     if(d.warning){warning.style.display='block';warning.textContent=d.warning;}else{warning.style.display='none';warning.textContent='';}
