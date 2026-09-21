@@ -575,26 +575,21 @@ function similarityForCompetition(x,input){
 function extractCompetitionCity(rawAddress){
   const raw=String(rawAddress||'').replace(/\s+/g,' ').trim();
   if(!raw)return '';
-  // Priorité aux communes transmises directement par le géocodage.
-  // Pour une adresse complète du type "25 Rue du 8 Mai Charleville-Mézières 08000 - Victor Hugo",
-  // on ne doit surtout pas capturer "Mai Charleville-Mézières".
+  // Cette fonction sert uniquement de secours : le géocodage fournit normalement
+  // la commune. Elle ne doit jamais confondre un morceau du nom de rue avec la ville.
   const postal=raw.match(/\b\d{5}\b/);
   if(postal){
+    // Format : "08000 Charleville-Mézières - quartier".
+    const after=raw.match(/\b\d{5}\s+(.+?)(?:\s+-\s+|$)/);
+    if(after&&after[1])return after[1].trim();
     const before=raw.slice(0,postal.index).replace(/[,:\-]+\s*$/,'').trim();
-    // Commune composée avec tiret : cas très fréquent en France.
-    const hyphenCity=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+(?:[\-][A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)?)$/);
+    // Format : "25 rue ... Charleville-Mézières 08000 - quartier".
+    const hyphenCity=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+(?:-[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)?)$/);
     if(hyphenCity)return hyphenCity[1].trim();
-    // Format avec virgule : "25 rue ..., 08000 Charleville-Mézières".
+    // Format : "25 rue ..., Charleville 08000".
     const commaParts=before.split(/\s*,\s*/).filter(Boolean);
-    if(commaParts.length){
-      const tail=commaParts.at(-1).trim();
-      if(!/^\d+$/.test(tail))return tail.replace(/^\d{5}\s*/,'').trim();
-    }
+    if(commaParts.length)return commaParts.at(-1).trim();
   }
-  // Cas "08000 Charleville-Mézières".
-  const after=raw.match(/\b\d{5}\s+([^,]+)/);
-  if(after)return after[1].trim();
-  // Dernier recours : ne jamais utiliser le nom de rue complet comme ville.
   const parts=raw.split(/\s+-\s+/);
   return (parts[0]||raw).split(',').at(-1).trim();
 }
