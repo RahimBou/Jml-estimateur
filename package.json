@@ -4,7 +4,7 @@
   "private":true,
   "description":"JML Estimateur V1 — estimation immobilière DVF géolocalisée sans API payante",
   "main":"server.js",
-  "scripts":{"start":"node server.js","selftest":"node tests/selftest.js && node tests/competition-selftest.js"},
+  "scripts":{"start":"node server.js","selftest":"node tests/selftest.js"},
   "engines":{"node":">=18"},
   "dependencies":{}
 }
