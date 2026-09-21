@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.1 PRO — DVF géolocalisées · moteur multi-types · sans crédits Immo Data</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.2 PRO — DVF géolocalisées · comparables pondérés · sans crédits Immo Data</div></div></div></header>
 
 <main>
 <form id="form">
@@ -43,19 +43,19 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <div class="full"><label>Adresse complète</label><input id="address" required placeholder="Ex. 6 Rue Payer Guillemain, 08000 Charleville-Mézières"></div>
 <div><label>Type de bien</label><select id="realtyType">
 <option value="house">🏠 Maison</option><option value="apartment">🏢 Appartement</option><option value="building">🏬 Immeuble</option><option value="land">🌳 Terrain constructible</option><option value="agricultural_land">🌾 Terrain agricole</option><option value="garage">🚗 Garage / dépendance</option><option value="parking">🅿️ Parking</option><option value="commercial">🏪 Local commercial</option><option value="industrial">🏭 Local industriel / entrepôt</option><option value="other">❓ Autre bien</option></select></div>
-<div><label>Surface habitable (m²)</label><input id="livingArea" type="number" min="10" step="1" required placeholder="120"></div>
-<div><label>Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
-<div><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
-<div><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
-<div><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
-<div><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
+<div id="fieldLiving"><label id="labelLiving">Surface habitable (m²)</label><input id="livingArea" type="number" min="0" step="1" placeholder="120"></div>
+<div id="fieldLand"><label id="labelLand">Surface du terrain (m²)</label><input id="landArea" type="number" min="0" step="1" placeholder="300"></div>
+<div id="fieldRooms"><label>Nombre de pièces</label><input id="rooms" type="number" min="0" step="1" placeholder="5"></div>
+<div id="fieldBathrooms"><label>Salles de bains / d'eau</label><input id="bathrooms" type="number" min="0" step="1" placeholder="2"></div>
+<div id="fieldYear"><label>Année de construction</label><input id="constructionYear" type="number" min="1800" max="2100" placeholder="1980"></div>
+<div id="fieldDpe"><label>DPE</label><select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></div>
 </div>
 </div>
 
 <div class="card">
 <h2>🏠 Caractéristiques</h2>
 <div class="grid">
-<div><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
+<div id="fieldCondition"><label>État général</label><select id="condition"><option value="">Non renseigné</option><option value="excellent">Excellent</option><option value="very_good">Très bon</option><option value="good">Bon</option><option value="refresh">À rafraîchir</option><option value="major_work">Travaux importants</option></select></div>
 <div class="hint">Les caractéristiques servent à pondérer les ventes réelles DVF. Le prix souhaité du propriétaire n’entre jamais dans le calcul.</div>
 <div class="full"><label>Équipements</label><div class="checks">
 <label class="check"><input id="garage" type="checkbox"> Garage</label>
@@ -89,7 +89,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m² ajusté</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
 <div class="card">
 <h2>🔒 Maintenant, parlons de votre prix</h2>
@@ -141,6 +141,61 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   let estimateValue = 0;
+
+  // Affichage dynamique des caractéristiques selon le type de bien.
+  // Le moteur reçoit toujours les mêmes champs, mais l'interface ne montre
+  // que ceux qui ont un sens pour la catégorie sélectionnée.
+  const typeUi = {
+    house: {living:['Surface habitable (m²)','120'], land:true, rooms:true, bathrooms:true, year:true, dpe:true, condition:true, equipment:true},
+    apartment: {living:['Surface habitable (m²)','70'], land:false, rooms:true, bathrooms:true, year:true, dpe:true, condition:true, equipment:true},
+    building: {living:['Surface bâtie totale (m²)','150'], land:true, rooms:false, bathrooms:false, year:true, dpe:false, condition:true, equipment:true},
+    land: {living:false, land:true, rooms:false, bathrooms:false, year:false, dpe:false, condition:false, equipment:false},
+    agricultural_land: {living:false, land:true, rooms:false, bathrooms:false, year:false, dpe:false, condition:false, equipment:false},
+    garage: {living:['Surface du garage / dépendance (m²)','20'], land:false, rooms:false, bathrooms:false, year:false, dpe:false, condition:true, equipment:false},
+    parking: {living:['Surface du parking / emplacement (m²)','12'], land:false, rooms:false, bathrooms:false, year:false, dpe:false, condition:true, equipment:false},
+    commercial: {living:['Surface commerciale (m²)','150'], land:true, rooms:false, bathrooms:false, year:true, dpe:false, condition:true, equipment:true},
+    industrial: {living:['Surface du local / entrepôt (m²)','500'], land:true, rooms:false, bathrooms:false, year:true, dpe:false, condition:true, equipment:true},
+    other: {living:['Surface du bien (m²)','100'], land:true, rooms:true, bathrooms:true, year:true, dpe:true, condition:true, equipment:true}
+  };
+
+  function setVisible(id, visible) {
+    const el=$(id); if(el) el.style.display=visible?'':'none';
+  }
+  function updateTypeFields() {
+    const type=$('realtyType').value;
+    const cfg=typeUi[type] || typeUi.other;
+    setVisible('fieldLiving', !!cfg.living);
+    setVisible('fieldLand', !!cfg.land);
+    setVisible('fieldRooms', !!cfg.rooms);
+    setVisible('fieldBathrooms', !!cfg.bathrooms);
+    setVisible('fieldYear', !!cfg.year);
+    setVisible('fieldDpe', !!cfg.dpe);
+    setVisible('fieldCondition', !!cfg.condition);
+    const checks=document.querySelector('.checks');
+    if(checks) checks.parentElement.style.display=cfg.equipment?'':'none';
+    if(cfg.living){
+      $('labelLiving').textContent=cfg.living[0];
+      $('livingArea').placeholder=cfg.living[1];
+      $('livingArea').min=(type==='land'||type==='agricultural_land')?'0':'1';
+    }
+    if(cfg.land) {
+      $('labelLand').textContent = (type==='land'||type==='agricultural_land') ? 'Surface du terrain (m²)' : 'Surface du terrain / emprise foncière (m²)';
+      $('landArea').placeholder = type==='agricultural_land' ? '5000' : '300';
+    }
+    // Nettoyage des valeurs masquées pour éviter qu'elles influencent l'analyse.
+    if(!cfg.land) $('landArea').value='';
+    if(!cfg.rooms) $('rooms').value='';
+    if(!cfg.bathrooms) $('bathrooms').value='';
+    if(!cfg.year) $('constructionYear').value='';
+    if(!cfg.dpe) $('dpe').value='';
+    if(!cfg.condition) $('condition').value='';
+    if(!cfg.equipment){
+      ['garage','parking','cellar','terrace','patio','niceView'].forEach(id=>{if($(id)) $(id).checked=false;});
+    }
+  }
+
+  $('realtyType').addEventListener('change', updateTypeFields);
+  updateTypeFields();
 
   function clear(node) {
     while (node.firstChild) node.removeChild(node.firstChild);
@@ -215,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 6;
+      td.colSpan = 8;
       td.textContent = 'Aucune vente comparable exploitable dans la fenêtre retenue.';
       tr.appendChild(td);
       body.appendChild(tr);
@@ -230,6 +285,8 @@ document.addEventListener('DOMContentLoaded', () => {
       appendCell(tr, euro(x.price));
       appendCell(tr, euro(x.sqmPrice));
       appendCell(tr, x.distanceKm == null ? '—' : Number(x.distanceKm).toFixed(2) + ' km');
+      appendCell(tr, x.score == null ? '—' : Number(x.score) + '/100');
+      appendCell(tr, x.influence == null ? '—' : Number(x.influence).toFixed(1) + ' %');
       body.appendChild(tr);
     });
   }
