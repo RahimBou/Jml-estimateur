@@ -1,10 +1,10 @@
 {
-  "name": "jml-estimateur-v7-1-pro-dvf",
-  "version": "7.1.0",
-  "private": true,
-  "description": "Estimateur immobilier JML Immobilier basé sur DVF+ géolocalisé, sans API payante Immo Data",
-  "main": "server.js",
-  "scripts": {"start":"node server.js","selftest":"node tests/selftest.js"},
-  "engines": {"node": ">=18"},
-  "dependencies": {"express":"^4.21.2"}
+  "name":"jml-estimateur-v1",
+  "version":"1.0.0",
+  "private":true,
+  "description":"JML Estimateur V1 — estimation immobilière DVF géolocalisée sans API payante",
+  "main":"server.js",
+  "scripts":{"start":"node server.js","selftest":"node tests/selftest.js"},
+  "engines":{"node":">=18"},
+  "dependencies":{}
 }
