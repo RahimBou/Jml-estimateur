@@ -1,4 +1,4 @@
-// JML Immobilier — Estimateur V7.1 PRO DVF
+// JML Immobilier — Estimateur V7.2 PRO DVF
 // Moteur professionnel : DVF+ géolocalisé, comparables multi-niveaux,
 // correction temporelle, gestion des mutations, score de similarité,
 // double contrôle et corrections JML clairement séparées des données DVF.
@@ -22,10 +22,12 @@ const GEO_CACHE = new Map();
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const CURRENT_DATA_YEAR = Number(process.env.CURRENT_DATA_YEAR || 2025);
 const DATA_MILLIME = process.env.DVF_MILLIME || 'avril 2026';
+const ENGINE_VERSION = '7.2.0-PRO-DVF';
 
 app.use(express.json({ limit: '100kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { etag:false, lastModified:false, maxAge:0 }));
-app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : path.join(__dirname, 'publique');
+app.use(express.static(PUBLIC_DIR, { etag:false, lastModified:false, maxAge:0 }));
+app.get('/', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 const TYPE_CONFIG = {
   house: { label:'Maison', dvf:['Maison'], built:true, ppsm:true },
@@ -69,7 +71,7 @@ function parseCsvLine(line){
 async function fetchBuffer(url){
   const ac=new AbortController(); const timer=setTimeout(()=>ac.abort(),DOWNLOAD_TIMEOUT_MS);
   try{
-    const r=await fetch(url,{signal:ac.signal,headers:{'User-Agent':'JML-Immobilier-Estimateur/7.1'}});
+    const r=await fetch(url,{signal:ac.signal,headers:{'User-Agent':'JML-Immobilier-Estimateur/7.2'}});
     if(!r.ok) throw new Error(`DVF HTTP ${r.status}`);
     return Buffer.from(await r.arrayBuffer());
   } finally { clearTimeout(timer); }
@@ -85,10 +87,6 @@ function canonicalType(raw){
 }
 function normalizeNature(raw){ return String(raw||'').trim(); }
 function isStandardSale(nature){ return nature==='Vente'; }
-// Pondération de la nature de mutation utilisée par le score des comparables.
-// Le moteur charge actuellement uniquement les mutations « Vente » ; la valeur
-// neutre 1 évite toute dépendance à une fonction absente et conserve les 5 points.
-function saleClassFactor(nature){ return isStandardSale(nature) ? 1 : 0.6; }
 
 async function loadYear(year){
   if(CACHE.has(year)) return CACHE.get(year);
@@ -148,7 +146,7 @@ async function geocode(address){
   const key=String(address||'').trim().toLowerCase();
   if(GEO_CACHE.has(key)) return GEO_CACHE.get(key);
   const url='https://data.geopf.fr/geocodage/search?'+new URLSearchParams({q:address,limit:'1'});
-  const r=await fetch(url,{headers:{'User-Agent':'JML-Immobilier-Estimateur/7.1'}});
+  const r=await fetch(url,{headers:{'User-Agent':'JML-Immobilier-Estimateur/7.2'}});
   if(!r.ok) throw new Error(`Géocodage IGN HTTP ${r.status}`);
   const j=await r.json(); const f=j?.features?.[0];
   if(!f?.geometry?.coordinates) throw new Error('Adresse introuvable. Vérifiez l’adresse et le code postal.');
@@ -184,58 +182,106 @@ function annualMarketFactors(rows,type){
     return clamp(latest/med,0.88,1.12);
   };
 }
-function areaSimilarity(a,b){ return b>0 ? Math.exp(-Math.abs(a-b)/Math.max(1,b*0.18)) : 0.4; }
-function roomSimilarity(a,b){ if(a<=0||b<=0)return 0.65; return Math.exp(-Math.abs(a-b)/1.2); }
-function landSimilarity(a,b){ if(a<=0||b<=0)return 0.65; return Math.exp(-Math.abs(a-b)/Math.max(a,b,1)*1.6); }
-function distanceSimilarity(km){ return Math.exp(-km/0.75); }
-function recencySimilarity(date){ const m=ageMonths(date); return m==null?0.35:Math.exp(-m/36); }
+function areaSimilarity(a,b){
+  if(a<=0||b<=0) return 0.55;
+  // Tolérance progressive : 20% d'écart ne doit pas éliminer un comparable pertinent.
+  return Math.exp(-Math.abs(a-b)/Math.max(1,b*0.30));
+}
+function roomSimilarity(a,b){
+  if(a<=0||b<=0) return 0.70;
+  return Math.exp(-Math.abs(a-b)/1.6);
+}
+function landSimilarity(a,b){
+  if(a<=0||b<=0) return 0.70;
+  const ratio=Math.max(a,b)/Math.max(1,Math.min(a,b));
+  return Math.exp(-Math.log(ratio)/1.8);
+}
+function distanceSimilarity(km){
+  // Même rue / quelques dizaines de mètres = signal très fort.
+  return Math.exp(-km/0.35);
+}
+function recencySimilarity(date){
+  const m=ageMonths(date); if(m==null) return 0.25;
+  // Demi-vie approximative de 15 mois : les ventes 2021 restent visibles,
+  // mais ne doivent plus peser comme celles de 2025.
+  return Math.exp(-m/21);
+}
+function comparableAdjustment(tx,s){
+  let factor=1;
+  // Normalisation de taille : un petit logement a souvent un €/m² supérieur.
+  // On ramène donc légèrement chaque comparable vers la taille du bien cible.
+  if(tx.area>0 && s.area>0){
+    const ratio=tx.area/s.area;
+    factor*=clamp(Math.pow(ratio,0.14),0.88,1.12);
+  }
+  // Normalisation très légère du nombre de pièces lorsque l'information existe.
+  if(tx.rooms>0 && s.rooms>0){
+    factor*=clamp(1 + (s.rooms-tx.rooms)*0.018,0.94,1.06);
+  }
+  return clamp(factor,0.84,1.16);
+}
 function scoreComparable(tx,s,temporalFn){
-  const d=haversine(s.latitude,s.longitude,tx.lat,tx.lon); if(d==null)return {score:0,weight:0,distanceKm:null,temporalFactor:1};
-  const typeScore=tx.type_local===s.dvfType?1:(s.type==='building' ? 0.65 : 0);
+  const d=haversine(s.latitude,s.longitude,tx.lat,tx.lon);
+  if(d==null)return {score:0,weight:0,distanceKm:null,temporalFactor:1,adjustmentFactor:1,adjustedMetric:null};
+  const cfg=TYPE_CONFIG[s.type];
+  const typeScore=cfg?.dvf?.includes(tx.type_local)?(s.type==='building' ? 0.65 : 1):0;
+  if(typeScore<=0) return {score:0,weight:0,distanceKm:d,temporalFactor:1,adjustmentFactor:1,adjustedMetric:null};
   const a=areaSimilarity(tx.area,s.area);
   const r=roomSimilarity(tx.rooms,s.rooms);
   const l=landSimilarity(tx.land,s.land);
   const dist=distanceSimilarity(d);
   const rec=recencySimilarity(tx.date);
   const tf=temporalFn(tx.date);
-  const raw=20*typeScore+20*dist+18*a+10*r+12*l+15*rec+5*saleClassFactor(tx.nature);
+  const adjustmentFactor=comparableAdjustment(tx,s);
+  const raw=20*typeScore+25*dist+20*rec+15*a+10*r+5*l+5;
   const score=Math.round(clamp(raw,0,100));
-  const weight=Math.max(0.0001,(score/100)**2*tf);
-  return {score,weight,distanceKm:d,temporalFactor:tf};
+  // Pondération non linéaire : les meilleurs comparables dominent sans écraser
+  // complètement le reste de l'échantillon.
+  const weight=Math.max(0.0001,Math.pow(score/100,3)*tf);
+  const adjustedMetric=Number.isFinite(tx.metric) ? tx.metric*adjustmentFactor*tf : null;
+  return {score,weight,distanceKm:d,temporalFactor:tf,adjustmentFactor,adjustedMetric};
 }
 function adaptiveComparables(rows,s){
   const temporalFn=annualMarketFactors(rows,s.type);
-  const scored=rows.map(tx=>{ const q=scoreComparable(tx,s,temporalFn); return {...tx,...q,metric:metricValue(tx,s.type)}; }).filter(x=>x.distanceKm!=null && Number.isFinite(x.metric) && x.metric>0);
-  const radii=[0.25,0.5,1,2,3,5];
+  const scored=rows.map(tx=>{ const q=scoreComparable(tx,s,temporalFn); return {...tx,...q}; })
+    .filter(x=>x.distanceKm!=null && Number.isFinite(x.metric) && x.metric>0 && Number.isFinite(x.adjustedMetric) && x.adjustedMetric>0);
+  // On cherche d'abord la qualité, puis on élargit le rayon si nécessaire.
+  const radii=[0.20,0.35,0.50,1,2,3,5];
   let chosen=[]; let used=5;
   for(const r of radii){
-    const candidates=scored.filter(x=>x.distanceKm<=r && x.score>=55);
+    const candidates=scored.filter(x=>x.distanceKm<=r && x.score>=55).sort((a,b)=>b.score-a.score);
     if(candidates.length>=8){ chosen=candidates;used=r;break; }
   }
-  if(!chosen.length){ chosen=scored.filter(x=>x.distanceKm<=5).sort((a,b)=>b.score-a.score).slice(0,40); }
+  if(!chosen.length){
+    chosen=scored.filter(x=>x.distanceKm<=5).sort((a,b)=>b.score-a.score).slice(0,40);
+  }
+  // Limite volontaire : un ancien comparable très nombreux ne doit pas diluer
+  // les ventes récentes et proches.
   chosen.sort((a,b)=>b.weight-a.weight);
   return {items:chosen.slice(0,30),radiusKm:used};
 }
 function iqrFilter(items){
-  const values=items.map(x=>x.metric).filter(Number.isFinite);
+  const values=items.map(x=>x.adjustedMetric||x.metric).filter(Number.isFinite);
   if(values.length<5) return {items,mode:'insufficient-sample'};
   const q1=percentile(values,.25),q3=percentile(values,.75),iqr=q3-q1;
   if(!Number.isFinite(iqr)||iqr<=0) return {items,mode:'no-dispersion'};
   const lo=q1-1.5*iqr,hi=q3+1.5*iqr;
-  const kept=items.filter(x=>x.metric>=lo&&x.metric<=hi);
+  const kept=items.filter(x=>{const v=x.adjustedMetric||x.metric; return v>=lo&&v<=hi;});
   return {items:kept.length>=4?kept:items,mode:kept.length>=4?'IQR':'IQR-fallback'};
 }
 function weightedMedian(items){
-  const rows=items.filter(x=>x.weight>0&&x.metric>0).sort((a,b)=>a.metric-b.metric);
+  const rows=items.filter(x=>x.weight>0&&(x.adjustedMetric||x.metric)>0).sort((a,b)=>(a.adjustedMetric||a.metric)-(b.adjustedMetric||b.metric));
   if(!rows.length)return null;
   const total=rows.reduce((s,x)=>s+x.weight,0); let acc=0;
-  for(const x of rows){ acc+=x.weight; if(acc>=total/2)return x.metric; }
-  return rows.at(-1).metric;
+  for(const x of rows){ acc+=x.weight; if(acc>=total/2)return x.adjustedMetric||x.metric; }
+  return rows.at(-1).adjustedMetric||rows.at(-1).metric;
 }
 function localStats(items){
   const values=items.map(x=>x.metric).filter(Number.isFinite);
+  const adjusted=items.map(x=>x.adjustedMetric||x.metric).filter(Number.isFinite);
   const med=median(values), q1=percentile(values,.25),q3=percentile(values,.75);
-  return {median:med,q1,q3,count:values.length,dispersion:med&&q1!=null&&q3!=null?(q3-q1)/med:null};
+  const adjustedMedian=median(adjusted);
+  return {median:med,adjustedMedian,q1,q3,count:values.length,dispersion:med&&q1!=null&&q3!=null?(q3-q1)/med:null};
 }
 function jmlAdjustments(s){
   // Ces corrections ne sont PAS des coefficients DVF officiels. Elles sont
@@ -280,7 +326,7 @@ async function estimate(payload){
   validatePayload(payload);
   const geo=await geocode(payload.address);
   const type=payload.realtyType;
-  if(TYPE_CONFIG[type].special==='manual') return {version:'7.1.1-PRO-DVF',manual:true,message:'Ce type de bien nécessite une analyse manuelle ou une source DVF spécifique. Le moteur ne fabriquera pas une valeur à partir de comparables d’un autre type.',geo,subject:payload};
+  if(TYPE_CONFIG[type].special==='manual') return {version:ENGINE_VERSION,manual:true,message:'Ce type de bien nécessite une analyse manuelle ou une source DVF spécifique. Le moteur ne fabriquera pas une valeur à partir de comparables d’un autre type.',geo,subject:payload};
   const area=num(payload.livingArea), land=num(payload.landArea), rooms=num(payload.rooms);
   const all=[]; const loaded=[]; const errors=[];
   for(const year of DVF_YEARS){ try{ all.push(...await loadYear(year)); loaded.push(year); }catch(e){ errors.push(`${year}: ${e.message}`); } }
@@ -302,23 +348,24 @@ async function estimate(payload){
   const spread=clamp(0.06+(100-conf.score)/100*0.16+(local.dispersion||0)*0.20,0.06,0.25);
   const low=round1000(main*(1-spread)), high=round1000(main*(1+spread));
   const direct=filtered.items.filter(x=>x.score>=75).length;
+  const marketMetric=local.adjustedMedian || local.median;
   const marketControl=cfg.ppsm ? local.median*area : local.median;
   const divergence=marketControl>0?Math.abs(marketControl-baseValue)/marketControl:null;
   const warning=divergence!=null&&divergence>0.15?'Divergence importante entre médiane locale et comparables pondérés. Analyse manuelle recommandée.':null;
-  const displayed=filtered.items.slice().sort((a,b)=>b.weight-a.weight).slice(0,15).map(x=>({date:x.date,price:x.price,sqmPrice:cfg.ppsm?round100(x.metric):null,metric:round100(x.metric),livingArea:x.area,landArea:x.land,rooms:x.rooms,distanceKm:Number(x.distanceKm.toFixed(2)),score:x.score,influence:x.weight,streetName:x.street,streetNumber:x.number,nature:x.nature,type:x.type_local,temporalFactor:x.temporalFactor}));
+  const displayed=filtered.items.slice().sort((a,b)=>b.weight-a.weight).slice(0,15).map(x=>({date:x.date,price:x.price,sqmPrice:cfg.ppsm?round100(x.adjustedMetric||x.metric):null,metric:round100(x.adjustedMetric||x.metric),livingArea:x.area,landArea:x.land,rooms:x.rooms,distanceKm:Number(x.distanceKm.toFixed(2)),score:x.score,influence:x.weight,adjustmentFactor:x.adjustmentFactor,streetName:x.street,streetNumber:x.number,nature:x.nature,type:x.type_local,temporalFactor:x.temporalFactor}));
   const totalWeight=filtered.items.reduce((s,x)=>s+x.weight,0)||1;
   displayed.forEach(x=>x.influence=Number((x.influence/totalWeight*100).toFixed(1)));
   const signals=[
-    formatSignal('Comparables DVF pondérés',round100(baseValue),Math.round(70+conf.score*0.2),`${filtered.items.length} ventes retenues, dont ${direct} très comparables`),
-    formatSignal('Médiane locale DVF',round100(marketControl),Math.max(5,Math.round(30-conf.score*0.08)),'Contrôle de cohérence statistique ; non additionné comme une seconde source indépendante')
+    formatSignal('Comparables DVF pondérés',round100(baseValue),100,`${filtered.items.length} ventes retenues, dont ${direct} très comparables`),
+    formatSignal('Médiane locale DVF',round100(marketControl),0,'Contrôle de cohérence uniquement ; elle n’est pas ajoutée une seconde fois au prix final')
   ];
   return {
-    version:'7.1.1-PRO-DVF', manual:false, estimate:main, low, high, spread,
+    version:ENGINE_VERSION, manual:false, estimate:main, low, high, spread,
     confidence:conf.score, confidenceLevel:conf.level,
-    method:'DVF géolocalisées → nettoyage → comparables directs/élargis → score /100 → filtre IQR → médiane pondérée → corrections JML indicatives séparées.',
+    method:'DVF géolocalisées → ventes récentes/proches → score de comparabilité /100 → normalisation surface/pièces/date → filtre IQR → médiane pondérée → corrections JML indicatives séparées. La médiane locale sert uniquement de contrôle et ne double pas le calcul.',
     data:{department:DVF_DEPT,years:loaded,millime:DATA_MILLIME,source:'DVF+ open-data / DGFiP'},
     selection:{radiusKm:selection.radiusKm,totalCandidates:selection.items.length,retained:filtered.items.length,directComparables:direct,filter:filtered.mode},
-    statistics:{metricLabel:metricLabel(type),weightedMetric:weighted,medianMetric:local.median,q1:local.q1,q3:local.q3,dispersion:local.dispersion,marketControlValue:marketControl,baseValue,adjustmentPct:jml.pct},
+    statistics:{metricLabel:metricLabel(type),weightedMetric:weighted,medianMetric:local.median,adjustedMedianMetric:marketMetric,q1:local.q1,q3:local.q3,dispersion:local.dispersion,marketControlValue:marketControl,baseValue,adjustmentPct:jml.pct},
     adjustments:jml.lines,
     divergencePct:divergence==null?null:Math.round(divergence*100), warning,
     sources:signals,
@@ -328,11 +375,11 @@ async function estimate(payload){
   };
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'7.1.1-PRO-DVF',department:DVF_DEPT,years:DVF_YEARS,millime:DATA_MILLIME,immoDataCalls:0}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:ENGINE_VERSION,department:DVF_DEPT,years:DVF_YEARS,millime:DATA_MILLIME,immoDataCalls:0}));
 app.post('/api/analyze',async(req,res)=>{
   try{ const result=await estimate(req.body||{}); res.json(result); }
-  catch(e){ res.status(400).json({error:e.message||'Erreur inconnue',version:'7.1.1-PRO-DVF'}); }
+  catch(e){ res.status(400).json({error:e.message||'Erreur inconnue',version:ENGINE_VERSION}); }
 });
 
-if(require.main===module){ app.listen(PORT,()=>console.log(`JML Estimateur V7.1 PRO DVF — http://localhost:${PORT}`)); }
+if(require.main===module){ app.listen(PORT,()=>console.log(`JML Estimateur V7.2 PRO DVF — http://localhost:${PORT}`)); }
 module.exports={median,percentile,adaptiveComparables,iqrFilter,buildConfidence,jmlAdjustments,TYPE_CONFIG,estimate};
