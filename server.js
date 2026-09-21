@@ -312,7 +312,7 @@ function analyze(rows,input,geo){
       filter:'24 mois · type identique · IQR 1,5 · cœur surface ≥ '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' % · surface hiérarchisée'
     },
     sources:[
-      {name:model.method==='centre local de marché cohérent'?'Base DVF — centre local cohérent':model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='centre local de marché cohérent'?
+      {name:model.method==='centre local de marché cohérent'?'Base DVF — centre local cohérent':model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='centre local de marché cohérent'
         ?model.primary.length+' ventes dans le cœur de surface, mais une dispersion locale a déclenché un centre robuste basé sur la médiane des '+c.length+' ventes retenues : '+Math.round(model.localMedianSqm)+' €/m².'
         :model.method==='cœur de comparabilité par surface'
         ?model.primary.length+' ventes dans le cœur de surface, avec poids renforcé selon la proximité exacte de surface et, si identifiable, de la rue, sur '+c.length+' comparables DVF retenus.'
