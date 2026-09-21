@@ -440,7 +440,10 @@ function extractCompetitionListing(html,url){
     const area=areaMatches.map(x=>parseLooseNumber(x[1])).find(x=>x>=15&&x<=5000)||0;
     const terrain=(text.match(/([0-9]{2,5}(?:[.,][0-9]+)?)\s*m²\s*(?:de\s*)?(?:terrain|parcelle)/i)||[])[1];
     const landArea=parseLooseNumber(terrain);
-    if(price&&area)best={title:'Annonce immobilière',price,area,rooms:0,locality:'',landArea};
+    const roomExplicit=(text.match(/([1-9][0-9]?)\s*(?:pièces?|p\.)/i)||[])[1];
+    const roomTF=(text.match(/\b[TF]\s*([1-9][0-9]?)\b/i)||[])[1];
+    const rooms=parseLooseNumber(roomExplicit||roomTF);
+    if(price&&area)best={title:'Annonce immobilière',price,area,rooms:rooms||0,locality:'',landArea};
   }
   if(!best||!best.price||!best.area)throw Error('Impossible d’extraire automatiquement le prix et la surface de cette annonce. Utilisez la saisie manuelle.');
   return {
