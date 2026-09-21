@@ -66,6 +66,34 @@ function selectFromBase(base,t,asOf=Date.now()){
 }
 function select(rows,t,cfg,asOf=Date.now()){return selectFromBase(consolidate(rows,cfg),t,asOf)}
 function confidence(c,t){if(!c.length)return 0;const avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length,med=median(c.map(r=>r.sqmPrice)),mad=median(c.map(r=>Math.abs(r.sqmPrice-med))),surface=c.reduce((s,r)=>s+Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),0)/c.length;return Math.max(0,Math.min(100,Math.round(Math.min(35,c.length*5)+Math.max(0,25-avgD*7)+Math.max(0,20-avgA*.7)+Math.max(0,20-mad/Math.max(1,med)*100)+surface*10)))}
+function estimateFromComparables(c,t){
+  if(!c.length)return 0;
+  const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
+  return Math.round(sqm*t.area/1000)*1000;
+}
+function learnCorrection(rows,cfg,target){
+  const all=consolidate(rows,cfg);
+  const historical=all.map(r=>({...r,distanceFromTarget:dist(target.lat,target.lon,r.lat,r.lon)}))
+    .filter(r=>date(r.date)?.getTime()<target.asOf&&r.distanceFromTarget<=2&&surfaceFactor(r,target)>0)
+    .sort((a,b)=>a.distanceFromTarget-b.distanceFromTarget||date(b.date)-date(a.date)).slice(0,36);
+  const ratios=[];
+  for(const sold of historical){
+    const soldDate=date(sold.date); if(!soldDate)continue;
+    const prior=all.filter(r=>date(r.date)?.getTime()<soldDate.getTime());
+    if(prior.length<6)continue;
+    const t={lat:sold.lat,lon:sold.lon,area:sold.area,rooms:sold.rooms||0,landArea:sold.landArea||0};
+    const c=selectFromBase(prior,t,soldDate);
+    const pred=estimateFromComparables(c,t);
+    if(pred>0&&sold.price>0){
+      const ratio=sold.price/pred;
+      if(ratio>=.60&&ratio<=1.60)ratios.push({ratio});
+    }
+  }
+  if(ratios.length<8)return{factor:1,samples:ratios.length,usable:false};
+  const rawMedian=median(ratios.map(x=>x.ratio));
+  const factor=Math.max(.85,Math.min(1.15,rawMedian));
+  return{factor,samples:ratios.length,usable:true,rawMedian};
+}
 function analyze(rows,input,geo){
   const cfg=TYPES[input.realtyType];
   if(!cfg)throw Error('Type de bien invalide.');
