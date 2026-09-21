@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V7 DVF Ardennes</title>
+<title>JML Immobilier — Estimateur V1.9.17 — DVF réelles · centre local robuste · DPE & caractéristiques · calibration transparente · écart fixe ±7 000 €</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -30,10 +30,40 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 .tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
 .compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
+
+.competition-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.competition-tools input{min-width:0}
+.competition-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.commercial-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.commercial-kpi{padding:14px;border:1px solid rgba(0,0,0,.08);border-radius:12px}
+.commercial-kpi b{display:block;font-size:1.15rem}
+.commercial-kpi span{display:block;font-size:.78rem;opacity:.7;margin-top:4px}
+.marketplace-btn{padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(0,0,0,.15)}
+@media(max-width:700px){.commercial-grid{grid-template-columns:1fr}}
+.competition-actions button,.print-btn{padding:10px 14px;border:0;border-radius:10px;cursor:pointer;font-weight:700}
+.competition-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.92rem}
+.competition-table th,.competition-table td{padding:8px;border-bottom:1px solid rgba(0,0,0,.08);text-align:left}
+.competition-table th{font-size:.8rem;text-transform:uppercase}
+.competition-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.competition-kpi{padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:12px}
+.competition-kpi b{display:block;font-size:1.05rem}
+.competition-kpi span{display:block;font-size:.78rem;opacity:.7}
+.competition-note{font-size:.85rem;opacity:.75}
+@media(max-width:700px){.competition-tools{grid-template-columns:1fr}.competition-summary{grid-template-columns:1fr}.competition-table{font-size:.8rem}}
+@media print{
+  body{background:#fff!important}
+  form,#showCompare,#compare,.competition-tools,.competition-actions,.no-print{display:none!important}
+  #result{display:block!important}
+  .card{break-inside:avoid;box-shadow:none!important}
+  .competition-table{font-size:10pt}
+  .print-only{display:block!important}
+}
+.print-only{display:none}
+
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V8 FEUILLE BLANCHE — DVF réelles · tendance locale · écart fixe ±20 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.9.17 — DVF réelles · surface hiérarchisée · centre local robuste · DPE & caractéristiques · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -87,9 +117,37 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </div>
 </div>
 
+<div class="card" id="commercialCard">
+<h2>💶 Prix de commercialisation — honoraires inclus</h2>
+<p class="hint">Le prix affiché au client est présenté <b>honoraires TTC inclus</b>, conformément au barème JML Immobilier.</p>
+<div class="commercial-grid">
+  <div class="commercial-kpi"><b id="commercialFai">—</b><span>Prix affiché FAI</span></div>
+  <div class="commercial-kpi"><b id="commercialFees">—</b><span>Honoraires</span></div>
+  <div class="commercial-kpi"><b id="commercialSeller">—</b><span>Prix vendeur indicatif</span></div>
+</div>
+<p id="commercialNote" class="footer-note"></p>
+</div>
+
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
 <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+
+
+<div class="card" id="competitionCard">
+<h2>🏠 Annonces actuellement en vente — agences & notaires des Ardennes</h2>
+<p class="hint">Liste des annonces publiques actuellement proposées par les agences immobilières, offices notariaux et sites immobiliers accessibles dans le département des Ardennes. Elles servent à observer le marché et <b>ne modifient jamais l'estimation DVF.</b></p>
+<div class="competition-actions">
+<button id="competitionSearch" type="button">🔎 RECHERCHER LES ANNONCES DU MARCHÉ</button>
+<button id="competitionClear" type="button">EFFACER</button>
+<button id="printReport" type="button" class="print-btn">📄 IMPRIMER / ENREGISTRER EN PDF</button>
+</div>
+<p id="competitionError" class="hint">La recherche se lance automatiquement après l'estimation.</p>
+<div id="competitionSummary" class="competition-summary"></div>
+<div class="tablewrap">
+<table class="competition-table"><thead><tr><th>Source</th><th>Annonce</th><th>Prix</th><th>Surface habitable</th><th>Terrain</th><th>€/m²</th><th>Pièces</th><th>Secteur</th><th>Lien</th></tr></thead><tbody id="competitionBody"></tbody></table>
+</div>
+<p class="competition-note">Cette liste présente des prix d'annonces actuellement affichés. Il ne s'agit pas de ventes réalisées et <b>aucune de ces annonces n'entre dans le calcul de l'estimation DVF.</b></p>
+</div>
 
 <div class="card">
 <h2>🔒 Maintenant, parlons de votre prix</h2>
@@ -124,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const requiredIds = [
     'form','error','loading','submit','result','main','range','confidence',
     'ppsm','txCount','window','sources','method','selection','txBody',
-    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning',
+    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning','commercialFai','commercialFees','commercialSeller','commercialNote',
     'address','realtyType','livingArea','landArea','rooms','bathrooms',
     'constructionYear','dpe','condition','garage','parking','cellar',
     'terrace','patio','niceView'
@@ -254,7 +312,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const hint = document.createElement('div');
       hint.className = 'hint';
-      hint.textContent = 'Poids dans le calcul : ' + (Number(s.weight)||0) + '%';
+      if (s.role === 'adjustment') {
+        hint.textContent = 'Correction appliquée au socle DVF : ' + (Number(s.delta)>=0?'+':'') + euro(s.delta || 0);
+      } else if (s.role === 'cohort') {
+        hint.textContent = 'Cœur de comparabilité · utilisé comme socle si suffisamment fourni';
+      } else if (s.role === 'characteristic') {
+        hint.textContent = 'Ajustement caractéristiques · séparé du socle DVF · plafond ±10 %';
+      } else if (s.role === 'market') {
+        hint.textContent = 'Centre local · intégré au calcul';
+      } else if (s.role === 'control') {
+        hint.textContent = 'Contrôle uniquement · 0 % dans le calcul';
+      } else {
+        hint.textContent = 'Socle principal · 100 % du calcul';
+      }
 
       const reason = document.createElement('div');
       reason.className = 'hint';
@@ -298,14 +368,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.manual) throw new Error(d.message || 'Analyse manuelle nécessaire.');
     if (d.estimate == null) throw new Error('Réponse serveur incomplète : estimation absente.');
     estimateValue = Number(d.estimate) || 0;
+    const commercial=d.commercial || {};
+    setText('commercialFai', euro(commercial.finalPrice || d.estimate));
+    setText('commercialFees', euro(commercial.fees || 0) + ' (' + (commercial.rateLabel || '5 %') + ')');
+    setText('commercialSeller', euro(commercial.sellerPrice || 0));
+    setText('commercialNote', commercial.note || 'Prix affiché honoraires inclus ; prix vendeur calculé selon le barème JML.');
     setText('main', euro(d.estimate));
-    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 20000) + ')');
+    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 7000) + ')');
     setText('confidence', 'Fiabilité : ' + (d.confidence ?? '—') + '/100 · ' + (d.confidenceLevel || '—'));
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
     setText('window', (d.selection?.radiusKm ?? '—') + ' km');
-    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
+    setText('selection',
+      (d.selection?.directComparables || 0) + ' comparables directs · ' +
+      (d.selection?.retained || 0) + ' retenus · ' +
+      (d.selection?.primaryComparables || 0) + ' dans le cœur de surface · filtre ' +
+      (d.selection?.filter || '—')
+    );
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
     if (d.statistics?.trendAnnualPct != null) {
       const t = Number(d.statistics.trendAnnualPct);
@@ -320,15 +400,125 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderSources(Array.isArray(d.sources) ? d.sources : []);
     const adjBox=$('adjustments'); clear(adjBox);
-    const p=document.createElement('p'); p.textContent='Corrections JML indicatives : ' + ((Number(d.statistics?.adjustmentPct)||0)*100).toFixed(1) + '%'; adjBox.appendChild(p);
-    (d.adjustments||[]).forEach(a=>{const x=document.createElement('div');x.textContent='• '+a.label+' : '+((Number(a.pct)||0)*100).toFixed(1)+'%';adjBox.appendChild(x);});
+    const p=document.createElement('p');
+    const chars=d.characteristics || {};
+    p.textContent='Critères réellement monétisés par les ventes DVF : ' + ((chars.monetary||[]).join(', ') || '—') + '.';
+    adjBox.appendChild(p);
+    const p2=document.createElement('p');
+    p2.textContent='Caractéristiques renseignées : ' + ((chars.supplied||[]).join(', ') || 'aucune') + '.';
+    adjBox.appendChild(p2);
+    const p3=document.createElement('p');
+    p3.textContent=(chars.note || 'Les caractéristiques absentes des données DVF sont traitées séparément avec un ajustement prudent.') +
+      ' V1.4 : DPE, état et équipements peuvent maintenant produire un ajustement complémentaire transparent, plafonné à ±10 %. Le terrain reste traité par la comparabilité DVF pour éviter un double comptage.';
+    adjBox.appendChild(p3);
     const warning=$('warning');
     if(d.warning){warning.style.display='block';warning.textContent=d.warning;}else{warning.style.display='none';warning.textContent='';}
     renderTransactions(d.comparables?.data || []);
     result.style.display='block'; result.scrollIntoView({behavior:'smooth'});
   }
 
-  form.addEventListener('submit', async event => {
+  
+  let competition = [];
+  let lastAnalysisPayload = null;
+
+  function renderCompetition(){
+    const body=$('competitionBody'), summary=$('competitionSummary');
+    if(!body||!summary)return;
+    clear(body); clear(summary);
+
+    if(!competition.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');
+      td.colSpan=9;
+      td.textContent='Aucune annonce exploitable trouvée dans les sources publiques accessibles pour cette commune et ce type de bien. Relancez la recherche si nécessaire.';
+      tr.appendChild(td);body.appendChild(tr);
+      return;
+    }
+
+    const prices=competition.map(x=>Number(x.price)).filter(x=>x>0).sort((a,b)=>a-b);
+    const med=prices.length?(prices.length%2?prices[(prices.length-1)/2]:(prices[prices.length/2-1]+prices[prices.length/2])/2):0;
+    const sources=[...new Set(competition.map(x=>x.source).filter(Boolean))];
+
+    [
+      ['Annonces trouvées',competition.length,'biens actuellement affichés'],
+      ['Prix affichés',prices.length?euro(Math.min(...prices))+' → '+euro(Math.max(...prices)):'—','fourchette observée'],
+      ['Prix médian',med?euro(med):'—','annonces trouvées'],
+      ['Sources',sources.length?String(sources.length):'—',sources.join(' · ')||'—']
+    ].forEach(a=>{
+      const d=document.createElement('div');d.className='competition-kpi';
+      const b=document.createElement('b');b.textContent=a[1];
+      const s=document.createElement('span');s.textContent=a[0]+' · '+a[2];
+      d.append(b,s);summary.appendChild(d);
+    });
+
+    competition.forEach(x=>{
+      const tr=document.createElement('tr');
+      appendCell(tr,x.source||'—');
+      appendCell(tr,x.title||'Annonce immobilière');
+      appendCell(tr,euro(x.price));
+      appendCell(tr,x.area?Math.round(x.area)+' m²':'—');
+      appendCell(tr,x.landArea?Math.round(x.landArea)+' m²':'—');
+      appendCell(tr,x.sqmPrice?Math.round(x.sqmPrice)+' €/m²':'—');
+      appendCell(tr,x.rooms?String(x.rooms):'—');
+      appendCell(tr,x.locality||'—');
+      const td=document.createElement('td');
+      if(x.url){
+        const a=document.createElement('a');
+        a.href=x.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Voir';
+        td.appendChild(a);
+      }else td.textContent='—';
+      tr.appendChild(td);body.appendChild(tr);
+    });
+  }
+
+  async function searchCompetition(payload){
+    const button=$('competitionSearch'),error=$('competitionError');
+    if(!button)return;
+    button.disabled=true;
+    if(error){error.textContent='🔎 Recherche des annonces actuellement en vente et lecture des pages publiques…';error.className='hint';}
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),30000);
+    try{
+      const r=await fetch('/api/competition/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        cache:'no-store',
+        signal:controller.signal,
+        body:JSON.stringify(payload)
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||'La recherche des annonces actuelles a échoué.');
+      competition=Array.isArray(d.listings)?d.listings:[];
+      renderCompetition();
+      if(error){
+        if(competition.length){
+          error.textContent='✅ '+competition.length+' annonce(s) du marché actuellement trouvée(s).';
+        }else{
+          const city=d.diagnostic?.city || payload.city || '';
+          error.textContent='Aucune annonce exploitable trouvée dans les sources publiques accessibles'+(city?' pour '+city:'')+'.';
+        }
+        error.className='hint';
+      }
+    }catch(e){
+      competition=[];
+      renderCompetition();
+      if(error){
+        error.textContent=e.name==='AbortError'
+          ? '⏱️ La recherche a dépassé 30 secondes. Relancez la recherche.'
+          : (e.message||'Recherche impossible.');
+        error.className='error';
+      }
+    }finally{
+      clearTimeout(timeout);
+      button.disabled=false;
+    }
+  }
+
+  $('competitionSearch')?.addEventListener('click',()=>{if(lastAnalysisPayload)searchCompetition(lastAnalysisPayload);});
+  $('competitionClear')?.addEventListener('click',()=>{competition=[];renderCompetition();});
+  $('printReport')?.addEventListener('click',()=>window.print());
+  renderCompetition();
+
+form.addEventListener('submit', async event => {
     event.preventDefault();
 
     errorBox.textContent = '';
@@ -356,7 +546,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
-      if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
       if (['house','apartment','building','commercial','industrial'].includes(payload.realtyType) && (!Number.isFinite(payload.livingArea) || payload.livingArea < 10)) {
         throw new Error('La surface bâtie/habitable doit être renseignée.');
       }
@@ -375,6 +564,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) throw new Error(data.error || 'Erreur pendant l’analyse.');
 
       render(data);
+      lastAnalysisPayload = payload;
+      if(data.location?.city) lastAnalysisPayload.city = data.location.city;
+      if(data.location?.postal) lastAnalysisPayload.postal = data.location.postal;
+      searchCompetition(lastAnalysisPayload);
     } catch (err) {
       console.error('JML Estimateur analyse:', err);
       showError(err && err.message ? err.message : 'Erreur inconnue.');

@@ -1,0 +1,25 @@
+name: JML V1 Selftest
+on:
+  push:
+    branches: [codex/jml-v1-rebuild]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: node tests/selftest.js
+      - run: node tests/matrix-selftest.js
+      - run: node tests/real-dvf-smoke.js
+      - run: node tests/real-dvf-matrix.js
+      - run: node tests/model-benchmark.js
+      - run: node tests/consolidation-audit.js
+      - run: node tests/outlier-benchmark.js
+      - run: node tests/segmentation-benchmark.js
+      - run: node tests/k-benchmark.js
