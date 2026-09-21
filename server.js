@@ -611,10 +611,6 @@ async function searchCompetitionListings(input){
   }[input.realtyType]||'immobilier';
 
   const portals=['seloger.com','leboncoin.fr','bienici.com','logic-immo.com','pap.fr'];
-
-  // V1.8.5 : on affiche un échantillon du marché actuellement proposé,
-  // et non uniquement des biens "suffisamment similaires".
-  // Ces annonces restent totalement séparées du calcul DVF.
   const queries=[];
   for(const domain of portals){
     queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
@@ -628,23 +624,29 @@ async function searchCompetitionListings(input){
   const found=[];
   for(const links of searchBatches){
     for(const l of links){
-      try{
-        if(!competitionHostAllowed(new URL(l.url).hostname))continue;
-      }catch{continue;}
+      try{if(!competitionHostAllowed(new URL(l.url).hostname))continue}catch{continue}
       if(found.some(x=>x.url===l.url))continue;
       found.push(l);
-      if(found.length>=80)break;
+      if(found.length>=36)break;
     }
-    if(found.length>=80)break;
+    if(found.length>=36)break;
   }
 
-  // On conserve uniquement les résultats publics dont le texte contient
-  // au minimum un prix et une surface. Il n'y a volontairement plus de
-  // seuil de surface, de pièces ou de terrain : on veut LISTER le marché.
-  const parsed=found.map(l=>listingFromSearchResult(l)).filter(Boolean);
-  const cityNorm=norm(city);
-  const typeNeedle=norm(typeLabel);
+  // V1.8.7 : les moteurs de recherche servent uniquement à découvrir les URLs.
+  // Ensuite on lit directement les pages publiques des annonces pour récupérer
+  // prix/surface/pièces via JSON-LD ou le contenu HTML. Cela évite de dépendre
+  // du fait que Bing/DDG affiche ou non ces informations dans son extrait.
+  const direct=await Promise.allSettled(found.slice(0,30).map(async r=>{
+    try{
+      const item=await importCompetitionListing(r.url);
+      return {...item,title:item.title&&item.title!=='Annonce immobilière'?item.title:(r.title||item.title),fromSearch:true};
+    }catch{
+      return listingFromSearchResult(r);
+    }
+  }));
 
+  const parsed=direct.map(x=>x.status==='fulfilled'?x.value:null).filter(Boolean);
+  const typeNeedle=norm(typeLabel);
   const market=parsed.filter(x=>{
     const text=norm((x.title||'')+' '+(x.snippet||'')+' '+(x.locality||''));
     const typeOk=input.realtyType==='house'
@@ -660,7 +662,6 @@ async function searchCompetitionListings(input){
     const key=x.url||[x.source,x.price,x.area,x.rooms,norm(x.title)].join('|');
     if(!unique.has(key))unique.set(key,x);
   }
-
   return [...unique.values()].slice(0,20);
 }
 
