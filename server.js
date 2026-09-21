@@ -441,8 +441,8 @@ function decodeHtml(s){
 function stripHtml(s){return decodeHtml(String(s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());}
 function competitionTypeFromText(s){
   const x=norm(s);
-  if(/\bappartement\b|\bt[0-9]\b|\bf[0-9]\b/.test(x))return'apartment';
   if(/\bmaison\b|\bvilla\b|\bpavillon\b/.test(x))return'house';
+  if(/\bappartement\b|\bt[0-9]\b|\bf[0-9]\b/.test(x))return'apartment';
   if(/\bgarage\b|\bdependance\b/.test(x))return'garage';
   if(/\bparking\b/.test(x))return'parking';
   if(/\blocal commercial\b|\bcommerce\b/.test(x))return'commercial';
