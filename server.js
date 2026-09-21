@@ -377,13 +377,15 @@ function extractCompetitionListing(html,url){
     const offers=o?.offers||o?.offer||{};
     const price=parseLooseNumber(typeof offers==='object'?offers.price:o.price);
     const fs=o?.floorSize;
+    const ls=o?.lotSize||o?.landSize;
     const area=parseLooseNumber(typeof fs==='object'?fs.value:fs)||parseLooseNumber(o?.area);
+    const landArea=parseLooseNumber(typeof ls==='object'?ls.value:ls)||parseLooseNumber(o?.surfaceTerrain);
     const rooms=parseLooseNumber(o?.numberOfRooms);
     const title=String(o?.name||o?.headline||'').trim();
     const addr=o?.address;
     const locality=typeof addr==='object'?String(addr.addressLocality||'').trim():'';
     if(price>=10000&&area>=15&&area<=5000){
-      const candidate={title,price,area,rooms,locality};
+      const candidate={title,price,area,rooms,locality,landArea};
       if(!best||((rooms>0?1:0)+(title?1:0)+(locality?1:0))>((best.rooms>0?1:0)+(best.title?1:0)+(best.locality?1:0)))best=candidate;
     }
   }
@@ -393,7 +395,9 @@ function extractCompetitionListing(html,url){
     const areaMatches=[...text.matchAll(/([0-9]{2,4}(?:[.,][0-9]+)?)\s*m²/gi)];
     const price=priceMatches.map(x=>parseLooseNumber(x[1])).find(x=>x>=10000)||0;
     const area=areaMatches.map(x=>parseLooseNumber(x[1])).find(x=>x>=15&&x<=5000)||0;
-    if(price&&area)best={title:'Annonce immobilière',price,area,rooms:0,locality:''};
+    const terrain=(text.match(/([0-9]{2,5}(?:[.,][0-9]+)?)\s*m²\s*(?:de\s*)?(?:terrain|parcelle)/i)||[])[1];
+    const landArea=parseLooseNumber(terrain);
+    if(price&&area)best={title:'Annonce immobilière',price,area,rooms:0,locality:'',landArea};
   }
   if(!best||!best.price||!best.area)throw Error('Impossible d’extraire automatiquement le prix et la surface de cette annonce. Utilisez la saisie manuelle.');
   return {
@@ -404,6 +408,7 @@ function extractCompetitionListing(html,url){
     area:best.area,
     rooms:best.rooms||0,
     locality:best.locality||'',
+    landArea:best.landArea||0,
     sqmPrice:Math.round(best.price/best.area),
     importedAt:new Date().toISOString()
   };
@@ -476,17 +481,21 @@ async function searchWebLinks(query){
 function similarityForCompetition(x,input){
   const targetArea=n(input.livingArea)||n(input.landArea);
   const targetRooms=n(input.rooms);
+  const targetLand=n(input.landArea);
   const areaRatio=targetArea&&x.area?Math.min(targetArea,x.area)/Math.max(targetArea,x.area):0;
   const areaScore=areaRatio?Math.max(0,100-Math.abs(x.area-targetArea)/targetArea*100):50;
-  const roomScore=targetRooms&&x.rooms?Math.max(0,100-Math.abs(x.rooms-targetRooms)*35):55;
-  const type=competitionTypeFromText((x.title||'')+' '+(x.description||'')); 
-  const typeScore=type===input.realtyType?100:(type==='other'?35:0);
-  const locality=norm(x.locality||'');
+  const roomScore=targetRooms&&x.rooms?Math.max(0,100-Math.abs(x.rooms-targetRooms)*45):55;
+  const landRatio=targetLand&&x.landArea?Math.min(targetLand,x.landArea)/Math.max(targetLand,x.landArea):0;
+  const landScore=landRatio?Math.max(0,100-Math.abs(x.landArea-targetLand)/targetLand*100):60;
+  const type=competitionTypeFromText((x.title||'')+' '+(x.description||''));
+  const typeScore=type===input.realtyType?100:0;
+  const locality=norm((x.locality||'')+' '+(x.title||''));
   const city=norm(input.city||'');
   const localityScore=city&&locality&&locality.includes(city)?100:70;
-  if(typeScore===0||areaRatio<.70)return null;
-  if(targetRooms&&x.rooms&&Math.abs(x.rooms-targetRooms)>2)return null;
-  const score=Math.round(areaScore*.50+roomScore*.25+typeScore*.15+localityScore*.10);
+  if(typeScore===0||areaRatio<.80)return null;
+  if(targetRooms&&x.rooms&&Math.abs(x.rooms-targetRooms)>1)return null;
+  if(targetLand&&x.landArea&&landRatio<.55)return null;
+  const score=Math.round(areaScore*.40+roomScore*.25+landScore*.15+typeScore*.15+localityScore*.05);
   return {...x,similarity:score,type};
 }
 async function searchCompetitionListings(input){
@@ -525,7 +534,7 @@ async function searchCompetitionListings(input){
   const listings=checked.filter(Boolean).slice(0,10);
   const unique=new Map();
   for(const x of listings){
-    const key=[x.source,x.price,x.area,x.rooms,norm(x.locality)].join('|');
+    const key=[x.source,x.price,x.area,x.landArea||0,x.rooms,norm(x.locality)].join('|');
     if(!unique.has(key)||x.similarity>unique.get(key).similarity)unique.set(key,x);
   }
   return [...unique.values()].sort((a,b)=>b.similarity-a.similarity).slice(0,10);
