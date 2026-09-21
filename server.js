@@ -20,7 +20,7 @@ const TYPES={
 function norm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()}
 function n(v){const x=Number(String(v??'').replace(',','.').replace(/\s/g,''));return Number.isFinite(x)?x:0}
 function date(v){const d=new Date(String(v||'').slice(0,10));return Number.isNaN(d.getTime())?null:d}
-function ageMonths(d){return Math.max(0,(Date.now()-d.getTime())/2629800000)}
+function ageMonths(d,asOf=Date.now()){const t=asOf instanceof Date?asOf.getTime():asOf;return Math.max(0,(t-d.getTime())/2629800000)}
 function dist(a,b,c,d){const p=Math.PI/180,x=.5-Math.cos((c-a)*p)/2+Math.cos(a*p)*Math.cos(b*p)*(1-Math.cos((d-b)*p))/2;return 12742*Math.asin(Math.sqrt(Math.max(0,x)))}
 function rw(m){for(const [max,w] of RECENCY)if(m<=max)return w;return 0}
 function median(a){const x=[...a].sort((a,b)=>a-b);if(!x.length)return 0;const i=(x.length-1)/2;return x[Math.floor(i)]===x[Math.ceil(i)]?x[Math.floor(i)]:(x[Math.floor(i)]+x[Math.ceil(i)])/2}
@@ -49,12 +49,12 @@ function weight(r,t){
   const landFactor=t.landArea&&r.landArea?Math.max(.45,Math.min(1,Math.min(t.landArea,r.landArea)/Math.max(t.landArea,r.landArea))):.85;
   return sf*rw(r.age)*Math.exp(-r.distance/.60)*roomFactor*landFactor*(0.55+r.score/220);
 }
-function select(rows,t,cfg){
-  const base=consolidate(rows,cfg).map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date))}))
-    .filter(r=>r.age<=MAX_MONTHS&&r.distance<=5&&r.sqmPrice>0&&surfaceFactor(r,t)>0);
+function selectFromBase(base,t,asOf=Date.now()){
+  const usable=base.map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date),asOf)}))
+    .filter(r=>r.age>=0&&r.age<=MAX_MONTHS&&r.distance<=5&&r.sqmPrice>0&&surfaceFactor(r,t)>0);
   const sel=[];
   for(const rad of RADII){
-    for(const r of base.filter(x=>x.distance<=rad&&!sel.includes(x)).sort((a,b)=>score(b,t,rad)-score(a,t,rad))){
+    for(const r of usable.filter(x=>x.distance<=rad&&!sel.includes(x)).sort((a,b)=>score(b,t,rad)-score(a,t,rad))){
       r.score=score(r,t,rad); sel.push(r); if(sel.length>=20)break;
     }
     if(sel.length>=6)break;
@@ -64,8 +64,65 @@ function select(rows,t,cfg){
   keep.forEach(r=>r.weight=weight(r,t));
   return keep.filter(r=>r.weight>0).sort((a,b)=>b.weight-a.weight).slice(0,15);
 }
+function select(rows,t,cfg,asOf=Date.now()){return selectFromBase(consolidate(rows,cfg),t,asOf)}
+function estimateFromComparables(c,t){
+  if(!c.length)return 0;
+  const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
+  return Math.round(sqm*t.area/1000)*1000;
+}
+function learnCorrection(rows,cfg,target){
+  const all=consolidate(rows,cfg);
+  const historical=all.map(r=>({...r,distanceFromTarget:dist(target.lat,target.lon,r.lat,r.lon)}))
+    .filter(r=>date(r.date)?.getTime()<target.asOf&&r.distanceFromTarget<=2&&surfaceFactor(r,target)>0)
+    .sort((a,b)=>a.distanceFromTarget-b.distanceFromTarget||date(b.date)-date(a.date)).slice(0,36);
+  const ratios=[];
+  for(const sold of historical){
+    const soldDate=date(sold.date);
+    const prior=all.filter(r=>date(r.date)?.getTime()<soldDate.getTime());
+    if(prior.length<6)continue;
+    const t={lat:sold.lat,lon:sold.lon,area:sold.area,rooms:sold.rooms||0,landArea:sold.landArea||0};
+    const c=selectFromBase(prior,t,soldDate);
+    const pred=estimateFromComparables(c,t);
+    if(pred>0&&sold.price>0){
+      const ratio=sold.price/pred;
+      if(ratio>=.60&&ratio<=1.60)ratios.push({ratio});
+    }
+  }
+  if(ratios.length<8)return{factor:1,samples:ratios.length,usable:false};
+  const rawMedian=median(ratios.map(x=>x.ratio));
+  const factor=Math.max(.85,Math.min(1.15,rawMedian));
+  return{factor,samples:ratios.length,usable:true,rawMedian};
+}
 function confidence(c,t){if(!c.length)return 0;const avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length,med=median(c.map(r=>r.sqmPrice)),mad=median(c.map(r=>Math.abs(r.sqmPrice-med))),surface=c.reduce((s,r)=>s+Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),0)/c.length;return Math.max(0,Math.min(100,Math.round(Math.min(35,c.length*5)+Math.max(0,25-avgD*7)+Math.max(0,20-avgA*.7)+Math.max(0,20-mad/Math.max(1,med)*100)+surface*10)))}
-function analyze(rows,input,geo){const cfg=TYPES[input.realtyType];if(!cfg)throw Error('Type de bien invalide.');if(['building','other'].includes(input.realtyType))return{manual:true,message:'Ce type n’est pas directement identifiable de façon fiable dans DVF V1. Une méthode dédiée est nécessaire pour éviter d’inventer un prix.'};const area=cfg.area==='land'?input.landArea:input.livingArea,t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0},c=select(rows,t,cfg);if(!c.length)return{manual:true,message:`Pas assez de ventes DVF exploitables pour ${cfg.label} dans les 24 derniers mois et 5 km.`};const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight}))),estimate=Math.round(sqm*area/1000)*1000,local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;return{estimate,low:Math.max(0,estimate-20000),high:estimate+20000,rangeEur:20000,confidence:conf,confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',method:'Médiane pondérée des ventes DVF comparables. Le prix propriétaire n’entre jamais dans le calcul.',statistics:{weightedMetric:sqm,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:0,metricLabel:'€/m²'},selection:{retained:c.length,directComparables:c.filter(r=>r.distance<=.75).length,radiusKm:Math.max(...c.map(r=>r.distance)),filter:'24 mois · type identique · IQR 1,5'},sources:[{name:'Ventes DVF comparables',value:estimate,weight:100,reason:`${c.length} ventes réelles retenues après filtrage.`},{name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}],comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}}}
+function analyze(rows,input,geo){
+  const cfg=TYPES[input.realtyType];
+  if(!cfg)throw Error('Type de bien invalide.');
+  if(['building','other'].includes(input.realtyType))return{manual:true,message:'Ce type n’est pas directement identifiable de façon fiable dans DVF V1. Une méthode dédiée est nécessaire pour éviter d’inventer un prix.'};
+  const area=cfg.area==='land'?input.landArea:input.livingArea;
+  const t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0};
+  const asOf=Date.now();
+  const c=select(rows,t,cfg,asOf);
+  if(!c.length)return{manual:true,message:'Pas assez de ventes DVF exploitables pour '+cfg.label+' dans les 24 derniers mois et 5 km.'};
+  const baseEstimate=estimateFromComparables(c,t);
+  const calibration=learnCorrection(rows,cfg,{...t,asOf});
+  const estimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
+  const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
+  return{
+    estimate,low:Math.max(0,estimate-20000),high:estimate+20000,rangeEur:20000,confidence:conf,
+    confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
+    method:calibration.usable?'Médiane pondérée DVF + calibration par backtest historique hors échantillon. Le prix propriétaire n’entre jamais dans le calcul.':'Médiane pondérée des ventes DVF comparables. Calibration historique insuffisante pour être appliquée.',
+    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,metricLabel:'€/m²'},
+    calibration:{applied:calibration.usable,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test'},
+    selection:{retained:c.length,directComparables:c.filter(r=>r.distance<=.75).length,radiusKm:Math.max(...c.map(r=>r.distance)),filter:'24 mois · type identique · IQR 1,5'},
+    sources:[
+      {name:'Ventes DVF comparables',value:baseEstimate,weight:100,reason:c.length+' ventes réelles retenues après filtrage.'},
+      ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,reason:calibration.samples+' ventes historiques testées hors échantillon.'}]:[]),
+      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
+    ],
+    comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
+    data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}
+  };
+}
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))}
 function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();send(res,200,analyze(rows,input,geo))}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1 sur http://localhost:${port}`))}
@@ -73,4 +130,4 @@ function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
 if(require.main===module)startServer();
-module.exports={startServer,median,percentile,wmedian,rw,consolidate,analyze,mockRows,TYPES,geocode,loadDvf};
+module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,estimateFromComparables,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
