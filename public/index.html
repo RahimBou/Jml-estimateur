@@ -421,7 +421,179 @@ document.addEventListener('DOMContentLoaded', () => {
   let competition = [];
   let lastAnalysisPayload = null;
 
-  );
+  function renderCompetition(){
+    const body=$('competitionBody'), summary=$('competitionSummary'), error=$('competitionError');
+    if(!body||!summary)return;
+    clear(body); clear(summary);
+    if(!competition.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');
+      td.colSpan=8;td.textContent='Aucun bien similaire trouvé automatiquement dans la commune et les quartiers accessibles pour le moment.';
+      tr.appendChild(td);body.appendChild(tr);
+      return;
+    }
+    const prices=competition.map(x=>Number(x.price)).filter(x=>x>0);
+    const sqm=competition.map(x=>Number(x.sqmPrice)).filter(x=>x>0).sort((a,b)=>a-b);
+    const med=sqm.length?(sqm.length%2?sqm[(sqm.length-1)/2]:(sqm[sqm.length/2-1]+sqm[sqm.length/2])/2):0;
+    const min=Math.min(...prices),max=Math.max(...prices);
+    [
+      ['Biens similaires',competition.length,'annonces actuelles retenues'],
+      ['Prix affichés',euro(min)+' → '+euro(max),'fourchette de concurrence'],
+      ['Médiane €/m²',Math.round(med)+' €/m²','annonces retenues']
+    ].forEach(a=>{
+      const d=document.createElement('div');d.className='competition-kpi';
+      const b=document.createElement('b');b.textContent=a[1];
+      const s=document.createElement('span');s.textContent=a[0]+' · '+a[2];
+      d.append(b,s);summary.appendChild(d);
+    });
+    competition.forEach(x=>{
+      const tr=document.createElement('tr');
+      appendCell(tr,(x.similarity||0)+' %');
+      appendCell(tr,x.source||'—');
+      appendCell(tr,euro(x.price));
+      appendCell(tr,Math.round(x.area)+' m²');
+      appendCell(tr,Math.round(x.sqmPrice)+' €/m²');
+      appendCell(tr,x.rooms?String(x.rooms):'—');
+      appendCell(tr,x.locality||'—');
+      const td=document.createElement('td');
+      if(x.url){
+        const a=document.createElement('a');
+        a.href=x.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Voir';
+        td.appendChild(a);
+      }else td.textContent='—';
+      tr.appendChild(td);
+      body.appendChild(tr);
+    });
+  }
+
+  async function searchCompetition(payload){
+    const button=$('competitionSearch'),error=$('competitionError');
+    if(!button)return;
+    button.disabled=true;
+    if(error){error.textContent='🔎 Recherche des annonces actuelles similaires en cours…';error.className='hint';}
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),30000);
+    try{
+      const r=await fetch('/api/competition/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        cache:'no-store',
+        signal:controller.signal,
+        body:JSON.stringify(payload)
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||'La recherche des annonces actuelles a échoué.');
+      competition=Array.isArray(d.listings)?d.listings:[];
+      renderCompetition();
+      if(error){
+        if(competition.length){
+          error.textContent='✅ '+competition.length+' bien(s) actuellement en vente retenu(s) après filtrage de similarité.';
+        }else{
+          const city=d.diagnostic?.city || payload.city || '';
+          error.textContent='Aucune annonce suffisamment similaire trouvée dans les sources accessibles'+(city?' pour '+city:'')+'.';
+        }
+        error.className='hint';
+      }
+    }catch(e){
+      competition=[];
+      renderCompetition();
+      if(error){
+        error.textContent=e.name==='AbortError'
+          ? '⏱️ La recherche a dépassé 30 secondes. Relancez la recherche.'
+          : (e.message||'Recherche impossible.');
+        error.className='error';
+      }
+    }finally{
+      clearTimeout(timeout);
+      button.disabled=false;
+    }
+  }
+
+  $('competitionSearch')?.addEventListener('click',()=>{if(lastAnalysisPayload)searchCompetition(lastAnalysisPayload);});
+  $('competitionClear')?.addEventListener('click',()=>{competition=[];renderCompetition();});
+  $('printReport')?.addEventListener('click',()=>window.print());
+  renderCompetition();
+
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+
+    errorBox.textContent = '';
+    errorBox.className = '';
+    loading.style.display = 'block';
+    submit.disabled = true;
+
+    const payload = {
+      address: $('address').value.trim(),
+      realtyType: $('realtyType').value,
+      livingArea: Number($('livingArea').value),
+      landArea: Number($('landArea').value || 0),
+      rooms: Number($('rooms').value || 0),
+      bathrooms: Number($('bathrooms').value || 0),
+      constructionYear: Number($('constructionYear').value || 0),
+      dpe: $('dpe').value,
+      condition: $('condition').value,
+      garage: $('garage').checked,
+      parking: $('parking').checked,
+      cellar: $('cellar').checked,
+      terrace: $('terrace').checked,
+      patio: $('patio').checked,
+      niceView: $('niceView').checked
+    };
+
+    try {
+      if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
+      if (['house','apartment','building','commercial','industrial'].includes(payload.realtyType) && (!Number.isFinite(payload.livingArea) || payload.livingArea < 10)) {
+        throw new Error('La surface bâtie/habitable doit être renseignée.');
+      }
+      if (['land','agricultural_land','garage','parking'].includes(payload.realtyType) && payload.landArea <= 0 && payload.livingArea <= 0) {
+        throw new Error('Renseignez une surface pour ce type de bien.');
+      }
+
+      const response = await fetch('/api/analyze', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        cache:'no-store',
+        body:JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Erreur pendant l’analyse.');
+
+      render(data);
+      lastAnalysisPayload = payload;
+      if(data.location?.city) lastAnalysisPayload.city = data.location.city;
+      if(data.location?.postal) lastAnalysisPayload.postal = data.location.postal;
+      searchCompetition(lastAnalysisPayload);
+    } catch (err) {
+      console.error('JML Estimateur analyse:', err);
+      showError(err && err.message ? err.message : 'Erreur inconnue.');
+    } finally {
+      loading.style.display = 'none';
+      submit.disabled = false;
+    }
+  });
+
+  $('showCompare').addEventListener('click', () => {
+    $('compare').style.display = 'block';
+    $('showCompare').style.display = 'none';
+    $('ownerPrice').focus();
+  });
+
+  $('compareBtn').addEventListener('click', () => {
+    const owner = Number($('ownerPrice').value || 0);
+    if (!owner || !estimateValue) return;
+
+    const diff = owner - estimateValue;
+    const pct = diff / estimateValue * 100;
+
+    $('comparison').textContent =
+      'Estimation JML : ' + euro(estimateValue) +
+      '\\nPrix envisagé : ' + euro(owner) +
+      '\\nÉcart : ' + (diff >= 0 ? '+' : '') + euro(diff) +
+      ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + ' %)';
+
+    $('comparison').style.whiteSpace = 'pre-line';
+  });
+});
 </script>
 </body>
 </html>
