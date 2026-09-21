@@ -111,6 +111,17 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </div>
 </div>
 
+<div class="card" id="commercialCard">
+<h2>💶 Prix de commercialisation — honoraires inclus</h2>
+<p class="hint">Le prix affiché au client est présenté <b>honoraires TTC inclus</b>, conformément au barème JML Immobilier.</p>
+<div class="commercial-grid">
+  <div class="commercial-kpi"><b id="commercialFai">—</b><span>Prix affiché FAI</span></div>
+  <div class="commercial-kpi"><b id="commercialFees">—</b><span>Honoraires</span></div>
+  <div class="commercial-kpi"><b id="commercialSeller">—</b><span>Prix vendeur indicatif</span></div>
+</div>
+<p id="commercialNote" class="footer-note"></p>
+</div>
+
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
 <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
@@ -122,6 +133,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <div class="competition-actions">
 <button id="competitionSearch" type="button">🔎 RECHERCHER LES BIENS SIMILAIRES</button>
 <button id="competitionClear" type="button">EFFACER</button>
+<a id="marketplaceLink" class="marketplace-btn" href="https://www.facebook.com/marketplace/category/propertyforsale/" target="_blank" rel="noopener noreferrer">🔵 OUVRIR FACEBOOK MARKETPLACE</a>
 <button id="printReport" type="button" class="print-btn">📄 IMPRIMER / ENREGISTRER EN PDF</button>
 </div>
 <p id="competitionError" class="hint">La recherche se lance automatiquement après l'estimation.</p>
@@ -165,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const requiredIds = [
     'form','error','loading','submit','result','main','range','confidence',
     'ppsm','txCount','window','sources','method','selection','txBody',
-    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning',
+    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning','commercialFai','commercialFees','commercialSeller','commercialNote','marketplaceLink',
     'address','realtyType','livingArea','landArea','rooms','bathrooms',
     'constructionYear','dpe','condition','garage','parking','cellar',
     'terrace','patio','niceView'
@@ -351,6 +363,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.manual) throw new Error(d.message || 'Analyse manuelle nécessaire.');
     if (d.estimate == null) throw new Error('Réponse serveur incomplète : estimation absente.');
     estimateValue = Number(d.estimate) || 0;
+    const commercial=d.commercial || {};
+    setText('commercialFai', euro(commercial.finalPrice || d.estimate));
+    setText('commercialFees', euro(commercial.fees || 0) + ' (' + (commercial.rateLabel || '5 %') + ')');
+    setText('commercialSeller', euro(commercial.sellerPrice || 0));
+    setText('commercialNote', commercial.note || 'Prix affiché honoraires inclus ; prix vendeur calculé selon le barème JML.');
     setText('main', euro(d.estimate));
     setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 7000) + ')');
     setText('confidence', 'Fiabilité : ' + (d.confidence ?? '—') + '/100 · ' + (d.confidenceLevel || '—'));
@@ -398,6 +415,17 @@ document.addEventListener('DOMContentLoaded', () => {
   
   let competition = [];
   let lastAnalysisPayload = null;
+
+  function updateMarketplaceLink(payload){
+    const link=$('marketplaceLink');
+    if(!link||!payload)return;
+    const type={house:'maison',apartment:'appartement',commercial:'local commercial',industrial:'local industriel',land:'terrain'}[payload.realtyType] || 'immobilier';
+    const bits=[type, payload.address||''];
+    if(payload.livingArea)bits.push(Math.round(payload.livingArea)+' m²');
+    if(payload.rooms)bits.push(payload.rooms+' pièces');
+    const query=bits.filter(Boolean).join(' ');
+    link.href='https://www.facebook.com/marketplace/category/propertyforsale/?query='+encodeURIComponent(query);
+  }
 
   function renderCompetition(){
     const body=$('competitionBody'), summary=$('competitionSummary'), error=$('competitionError');
@@ -538,6 +566,7 @@ form.addEventListener('submit', async event => {
 
       render(data);
       lastAnalysisPayload = payload;
+      updateMarketplaceLink(payload);
       searchCompetition(payload);
     } catch (err) {
       console.error('JML Estimateur analyse:', err);
