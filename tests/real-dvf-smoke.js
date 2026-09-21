@@ -1,7 +1,7 @@
 'use strict';
 process.env.MOCK_DVF_MODE='false';
 process.env.DVF_DEPT='08';
-process.env.DVF_YEARS='2025';
+process.env.DVF_YEARS='2025,2024,2023,2022';
 const assert=require('assert');
 const m=require('../server');
 (async()=>{
