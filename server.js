@@ -274,6 +274,21 @@ function characteristicReport(input,cfg,characteristic={note:'Les caractéristiq
     note:characteristic.note
   };
 }
+function commercialPricing(estimate){
+  const price=Math.max(0,Math.round(Number(estimate)||0));
+  // Barème JML fourni par l'agence : honoraires TTC inclus dans le prix affiché.
+  const rate=price<=50000?.10:price<=100000?.08:price<=150000?.06:.05;
+  const sellerPrice=Math.max(0,Math.round((price*(1-rate))/1000)*1000);
+  const fees=price-sellerPrice;
+  return {
+    rate,
+    rateLabel:Math.round(rate*100)+' %',
+    finalPrice:price,
+    sellerPrice,
+    fees,
+    note:'Prix affiché honoraires inclus. Prix vendeur calculé selon le barème JML appliqué au prix affiché.'
+  };
+}
 function analyze(rows,input,geo){
   const cfg=TYPES[input.realtyType];
   if(!cfg)throw Error('Type de bien invalide.');
@@ -291,8 +306,9 @@ function analyze(rows,input,geo){
   const characteristics=characteristicAdjustment(input,cfg,calibratedEstimate);
   const estimate=characteristics.finalEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
+  const commercial=commercialPricing(estimate);
   return{
-    estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
+    estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,commercial,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
     method:(model.method==='centre local de marché cohérent'
       ?'Centre local de marché robuste V1.6 : lorsque le cœur de surface est hétérogène et nettement sous la médiane locale, cette médiane devient le centre du socle. La calibration historique est alors volontairement neutralisée pour éviter un double biais.'
@@ -626,4 +642,4 @@ function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
 if(require.main===module)startServer();
-module.exports={startServer,searchCompetitionListings,similarityForCompetition,extractSearchResultLinks,extractCompetitionCity,median,percentile,wmedian,rw,consolidate,select,selectFromBase,primaryComparables,weightedMean,estimateFromComparables,learnCorrection,characteristicAdjustment,analyze,mockRows,TYPES,geocode,loadDvf,extractCompetitionListing,importCompetitionListing};
+module.exports={startServer,searchCompetitionListings,similarityForCompetition,extractSearchResultLinks,extractCompetitionCity,commercialPricing,median,percentile,wmedian,rw,consolidate,select,selectFromBase,primaryComparables,weightedMean,estimateFromComparables,learnCorrection,characteristicAdjustment,analyze,mockRows,TYPES,geocode,loadDvf,extractCompetitionListing,importCompetitionListing};
