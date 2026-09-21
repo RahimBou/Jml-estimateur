@@ -11,6 +11,7 @@ const base={address:'test',realtyType:'house',livingArea:74,landArea:290,rooms:4
 const direct=m.analyze(m.mockRows(),base,{lat:49.77,lon:4.72});
 assert(direct.estimate>0);
 assert.strictEqual(m.extractCompetitionCity('25 Rue du 8 Mai Charleville-Mézières 08000 - Victor Hugo'),'Charleville-Mézières');
+assert.deepStrictEqual(m.commercialPricing(160000),{rate:.05,rateLabel:'5 %',finalPrice:160000,sellerPrice:152000,fees:8000,note:'Prix affiché honoraires inclus. Prix vendeur calculé selon le barème JML appliqué au prix affiché.'});
 assert.strictEqual(direct.high,direct.estimate+7000);
 assert.strictEqual(direct.low,direct.estimate-7000);
 assert(direct.comparables.data.length>=4);
