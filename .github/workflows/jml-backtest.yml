@@ -13,6 +13,7 @@ jobs:
         with:
           node-version: 20
       - run: node tests/backtest.js
+      - run: node tests/real-dvf-matrix.js
         env:
           DVF_YEARS: 2025,2024,2023,2022
           BACKTEST_YEAR: 2025
