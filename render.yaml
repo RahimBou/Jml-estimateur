@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: jml-estimateur-dvf
+    runtime: node
+    plan: free
+    branch: codex/jml-v1-rebuild
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DVF_DEPT
+        value: "08"
+      - key: DVF_YEARS
+        value: "2025,2024,2023,2022"
+      - key: NODE_VERSION
+        value: "22"
