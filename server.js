@@ -70,10 +70,40 @@ function selectFromBase(base,t,asOf=Date.now()){
 }
 function select(rows,t,cfg,asOf=Date.now()){return selectFromBase(consolidate(rows,cfg),t,asOf)}
 function confidence(c,t){if(!c.length)return 0;const avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length,med=median(c.map(r=>r.sqmPrice)),mad=median(c.map(r=>Math.abs(r.sqmPrice-med))),surface=c.reduce((s,r)=>s+Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),0)/c.length;return Math.max(0,Math.min(100,Math.round(Math.min(35,c.length*5)+Math.max(0,25-avgD*7)+Math.max(0,20-avgA*.7)+Math.max(0,20-mad/Math.max(1,med)*100)+surface*10)))}
-function estimateFromComparables(c,t){
-  if(!c.length)return 0;
-  const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
-  return Math.round(sqm*t.area/1000)*1000;
+function primaryComparables(c,t){
+  if(!c.length)return [];
+  // Cœur de comparabilité : on ne laisse pas une multitude de petites
+  // surfaces décider du prix d'une maison nettement plus grande.
+  // Le seuil reste volontairement large pour conserver de la profondeur
+  // statistique quand le marché local est peu fourni.
+  const ratioMin=t.type==='apartment'?.80:t.type==='house'?.75:.70;
+  return c.filter(r=>{
+    const ratio=Math.min(r.area,t.area)/Math.max(r.area,t.area);
+    return ratio>=ratioMin&&r.distance<=.75;
+  });
+}
+
+function weightedMean(rows){
+  const x=rows.filter(r=>r.value>0&&r.weight>0);
+  if(!x.length)return 0;
+  const w=x.reduce((s,r)=>s+r.weight,0);
+  return w?x.reduce((s,r)=>s+r.value*r.weight,0)/w:0;
+}
+
+function estimateFromComparables(c,t,details=false){
+  if(!c.length)return details?{estimate:0,method:'none',primary:[]}:0;
+  const globalSqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
+  const primary=primaryComparables(c,t);
+  // Dès que le cœur contient au moins 3 ventes, il devient le socle :
+  // moyenne pondérée par récence, distance, pièces et surface.
+  // La médiane élargie reste disponible comme contrôle.
+  if(primary.length>=3){
+    const primarySqm=weightedMean(primary.map(r=>({value:r.sqmPrice,weight:r.weight})));
+    const estimate=Math.round(primarySqm*t.area/1000)*1000;
+    return details?{estimate,method:'cœur de comparabilité par surface',primary,globalSqm,primarySqm}:estimate;
+  }
+  const estimate=Math.round(globalSqm*t.area/1000)*1000;
+  return details?{estimate,method:'médiane pondérée élargie',primary,globalSqm,primarySqm:null}:estimate;
 }
 function learnCorrection(rows,cfg,target){
   const all=consolidate(rows,cfg);
@@ -128,19 +158,35 @@ function analyze(rows,input,geo){
   const asOf=Date.now();
   const c=select(rows,t,cfg,asOf);
   if(!c.length)return{manual:true,message:'Pas assez de ventes DVF exploitables pour '+cfg.label+' dans les 24 derniers mois et 5 km.'};
-  const baseEstimate=estimateFromComparables(c,t);
+  const model=estimateFromComparables(c,t,true);
+  const baseEstimate=model.estimate;
   const calibration=learnCorrection(rows,cfg,{...t,asOf});
   const estimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
   return{
     estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
-    method:calibration.usable?'Médiane pondérée DVF + calibration par backtest historique hors échantillon. Le prix propriétaire n’entre jamais dans le calcul.':'Médiane pondérée des ventes DVF comparables. Calibration historique insuffisante pour être appliquée.',
+    method:(model.method==='cœur de comparabilité par surface'
+      ?'Cœur de comparabilité DVF : priorité aux ventes de même type, proches géographiquement et à surface proche, puis calibration historique hors échantillon.'
+      :'Médiane pondérée des ventes DVF comparables : le cœur de surface est insuffisant pour constituer le socle.')+
+      ' Le prix propriétaire n’entre jamais dans le calcul.',
     statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:estimate-baseEstimate,finalEstimate:estimate,metricLabel:'€/m²'},
     calibration:{applied:calibration.usable,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test'},
-    selection:{retained:c.length,directComparables:c.filter(r=>r.distance<=.75).length,radiusKm:Math.max(...c.map(r=>r.distance)),filter:'24 mois · type identique · IQR 1,5'},
+    selection:{
+      retained:c.length,
+      directComparables:c.filter(r=>r.distance<=.75).length,
+      primaryComparables:model.primary.length,
+      primarySurfaceRatio:t.type==='apartment'?.80:t.type==='house'?.75:.70,
+      radiusKm:Math.max(...c.map(r=>r.distance)),
+      filter:'24 mois · type identique · IQR 1,5 · cœur surface ≥ '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %'
+    },
     sources:[
-      {name:'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:c.length+' ventes réelles retenues après filtrage.'},
+      {name:model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='cœur de comparabilité par surface'
+        ?model.primary.length+' ventes dans le cœur de surface, sur '+c.length+' comparables DVF retenus.'
+        :c.length+' ventes réelles retenues après filtrage ; le cœur de surface ne contient que '+model.primary.length+' vente(s).'},
+      ...(model.primary.length?[
+        {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'control',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
+      ]:[]),
       ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,role:'adjustment',delta:estimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
       {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
     ],
@@ -156,4 +202,4 @@ function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
 if(require.main===module)startServer();
-module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,estimateFromComparables,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
+module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,primaryComparables,weightedMean,estimateFromComparables,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
