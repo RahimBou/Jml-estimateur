@@ -130,7 +130,7 @@ function analyze(rows,input,geo){
   const estimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
   return{
-    estimate,low:Math.max(0,estimate-20000),high:estimate+20000,rangeEur:20000,confidence:conf,
+    estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
     method:calibration.usable?'Médiane pondérée DVF + calibration par backtest historique hors échantillon. Le prix propriétaire n’entre jamais dans le calcul.':'Médiane pondérée des ventes DVF comparables. Calibration historique insuffisante pour être appliquée.',
     statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:estimate-baseEstimate,finalEstimate:estimate,metricLabel:'€/m²'},
