@@ -65,10 +65,25 @@ function selectFromBase(base,t,asOf=Date.now()){
   return keep.filter(r=>r.weight>0).sort((a,b)=>b.weight-a.weight).slice(0,15);
 }
 function select(rows,t,cfg,asOf=Date.now()){return selectFromBase(consolidate(rows,cfg),t,asOf)}
+function temporalFactor(c){
+  const usable=c.filter(r=>r.age>=0&&r.age<=24&&r.sqmPrice>0&&r.weight>0);
+  if(usable.length<6)return 1;
+  let sw=0,sx=0,sy=0,sxx=0,sxy=0;
+  for(const r of usable){
+    const w=Math.max(.01,r.weight),x=r.age,y=Math.log(r.sqmPrice);
+    sw+=w;sx+=w*x;sy+=w*y;sxx+=w*x*x;sxy+=w*x*y;
+  }
+  const den=sw*sxx-sx*sx;
+  if(Math.abs(den)<1e-9)return 1;
+  const slope=(sw*sxy-sx*sy)/den;
+  if(!Number.isFinite(slope))return 1;
+  return Math.max(.90,Math.min(1.10,Math.exp(-slope*Math.min(12,Math.max(0,sw? sx/sw:0)))));
+}
 function estimateFromComparables(c,t){
   if(!c.length)return 0;
   const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
-  return Math.round(sqm*t.area/1000)*1000;
+  const trend=temporalFactor(c);
+  return Math.round(sqm*trend*t.area/1000)*1000;
 }
 function learnCorrection(rows,cfg,target){
   const all=consolidate(rows,cfg);
@@ -130,4 +145,4 @@ function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
 if(require.main===module)startServer();
-module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,estimateFromComparables,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
+module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,estimateFromComparables,temporalFactor,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
