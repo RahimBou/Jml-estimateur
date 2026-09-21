@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.2 PRO — DVF géolocalisées · comparables pondérés · sans crédits Immo Data</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.1 PRO — DVF géolocalisées · moteur multi-types · sans crédits Immo Data</div></div></div></header>
 
 <main>
 <form id="form">
@@ -76,7 +76,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 
 <section id="result" class="result">
 <div class="card hero">
-<div class="hint">Estimation JML — DVF Ardennes</div>
+<div class="hint">Estimation JML — DVF</div>
 <div id="main" class="price">—</div>
 <div id="range" class="range">—</div>
 <div id="confidence" class="confidence">Fiabilité : —/5</div>
@@ -89,7 +89,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
-<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m² ajusté</th><th>Distance</th><th>Score</th><th>Influence</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+<div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
 
 <div class="card">
 <h2>🔒 Maintenant, parlons de votre prix</h2>
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 8;
+      td.colSpan = 6;
       td.textContent = 'Aucune vente comparable exploitable dans la fenêtre retenue.';
       tr.appendChild(td);
       body.appendChild(tr);
@@ -285,8 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
       appendCell(tr, euro(x.price));
       appendCell(tr, euro(x.sqmPrice));
       appendCell(tr, x.distanceKm == null ? '—' : Number(x.distanceKm).toFixed(2) + ' km');
-      appendCell(tr, x.score == null ? '—' : Number(x.score) + '/100');
-      appendCell(tr, x.influence == null ? '—' : Number(x.influence).toFixed(1) + ' %');
       body.appendChild(tr);
     });
   }
@@ -302,8 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
-    setText('window', (d.selection?.radiusKm ?? '—') + ' km');
-    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
+    setText('window', '≤ ' + (d.selection?.maxAgeMonths ?? 24) + ' mois');
+    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · ≤ ' + (d.selection?.maxAgeMonths ?? 24) + ' mois · filtre ' + (d.selection?.filter || '—')); 
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
     renderSources(Array.isArray(d.sources) ? d.sources : []);
     const adjBox=$('adjustments'); clear(adjBox);
