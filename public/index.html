@@ -83,7 +83,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <div class="facts">
 <div class="fact"><b id="ppsm">—</b><span>Prix retenu / m²</span></div>
 <div class="fact"><b id="txCount">—</b><span>Ventes comparables</span></div>
-<div class="fact"><b id="window">—</b><span>Fenêtre utilisée</span></div>
+<div class="fact"><b id="window">—</b><span>Zone de recherche des comparables</span></div>
 </div>
 </div>
 
@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
-    setText('window', (d.selection?.radiusKm ?? '—') + ' km');
+    setText('window', (() => { const km = Number(d.selection?.radiusKm); if (!Number.isFinite(km)) return '—'; const m = Math.round(km * 1000); return m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : m + ' m'; })());
     setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
     if (d.statistics?.trendAnnualPct != null) {
