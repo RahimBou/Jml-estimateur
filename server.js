@@ -38,10 +38,13 @@ function score(r,t,rad){const type=25,d=20*Math.max(0,1-r.distance/rad),s=20*Mat
 function surfaceFactor(r,t){
   const ratio=Math.min(r.area,t.area)/Math.max(r.area,t.area);
   if(ratio<0.45)return 0;
-  if(ratio<0.60)return 0.25;
-  if(ratio<0.75)return 0.55;
-  if(ratio<0.90)return 0.80;
-  return 1;
+
+  // La surface reste un critère fort de comparabilité.
+  // On pénalise progressivement les écarts importants plutôt que
+  // de traiter une maison de 60 m² comme presque aussi comparable
+  // qu'une maison de 120 m².
+  const logGap=Math.abs(Math.log(Math.max(ratio,0.45)));
+  return Math.max(0.05,Math.min(1,Math.exp(-Math.pow(logGap/0.25,2))));
 }
 function weight(r,t){
   const sf=surfaceFactor(r,t); if(!sf)return 0;
