@@ -13,3 +13,5 @@ services:
         value: "2025,2024,2023,2022"
       - key: NODE_VERSION
         value: "22"
+      - key: JML_ENGINE_VERSION
+        value: "1.6.2"
