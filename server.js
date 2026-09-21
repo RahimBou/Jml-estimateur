@@ -35,8 +35,35 @@ async function fetchYear(y){if(process.env.MOCK_DVF_MODE==='true')return mockRow
 async function loadDvf(){return (await Promise.all(YEARS.map(y=>fetchYear(y).catch(()=>[])))).flat()}
 async function geocode(address){if(process.env.MOCK_DVF_MODE==='true')return{lat:49.77,lon:4.72,label:address};const u=new URL('https://data.geopf.fr/geocodage/search');u.searchParams.set('q',address);u.searchParams.set('limit','1');const r=await fetch(u);if(!r.ok)throw Error(`Géocodage: HTTP ${r.status}`);const d=await r.json(),f=d.features?.[0];if(!f?.geometry?.coordinates)throw Error('Adresse introuvable. Vérifiez l’adresse saisie.');return{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],label:f.properties?.label||address}}
 function score(r,t,rad){const type=25,d=20*Math.max(0,1-r.distance/rad),s=20*Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),p=t.rooms&&r.rooms?10*Math.max(0,1-Math.abs(t.rooms-r.rooms)/5):5,l=t.landArea&&r.landArea?10*Math.max(0,1-Math.abs(t.landArea-r.landArea)/Math.max(1,t.landArea)):5,rec=15*rw(r.age);return type+d+s+p+l+rec}
-function weight(r,t){const sr=Math.min(r.area,t.area)/Math.max(r.area,t.area);return rw(r.age)*Math.exp(-r.distance/.75)*Math.pow(sr,1.5)*(t.rooms&&r.rooms?Math.max(.35,1-Math.abs(t.rooms-r.rooms)*.12):.7)*(t.landArea&&r.landArea?Math.max(.35,Math.min(1,Math.min(t.landArea,r.landArea)/Math.max(t.landArea,r.landArea))):.8)*(.5+r.score/200)}
-function select(rows,t,cfg){const base=consolidate(rows,cfg).map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date))})).filter(r=>r.age<=MAX_MONTHS&&r.distance<=5&&r.sqmPrice>0),sel=[];for(const rad of RADII){for(const r of base.filter(x=>x.distance<=rad&&!sel.includes(x)).sort((a,b)=>score(b,t,rad)-score(a,t,rad))){r.score=score(r,t,rad);sel.push(r);if(sel.length>=20)break}if(sel.length>=6)break}const ps=sel.map(r=>r.sqmPrice),q1=percentile(ps,.25),q3=percentile(ps,.75),iqr=q3-q1,keep=iqr?sel.filter(r=>r.sqmPrice>=q1-1.5*iqr&&r.sqmPrice<=q3+1.5*iqr):sel;keep.forEach(r=>r.weight=weight(r,t));return keep.sort((a,b)=>b.weight-a.weight).slice(0,15)}
+function surfaceFactor(r,t){
+  const ratio=Math.min(r.area,t.area)/Math.max(r.area,t.area);
+  if(ratio<0.45)return 0;
+  if(ratio<0.60)return 0.25;
+  if(ratio<0.75)return 0.55;
+  if(ratio<0.90)return 0.80;
+  return 1;
+}
+function weight(r,t){
+  const sf=surfaceFactor(r,t); if(!sf)return 0;
+  const roomFactor=t.rooms&&r.rooms?Math.max(.45,1-Math.abs(t.rooms-r.rooms)*.10):.8;
+  const landFactor=t.landArea&&r.landArea?Math.max(.45,Math.min(1,Math.min(t.landArea,r.landArea)/Math.max(t.landArea,r.landArea))):.85;
+  return sf*rw(r.age)*Math.exp(-r.distance/.60)*roomFactor*landFactor*(0.55+r.score/220);
+}
+function select(rows,t,cfg){
+  const base=consolidate(rows,cfg).map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date))}))
+    .filter(r=>r.age<=MAX_MONTHS&&r.distance<=5&&r.sqmPrice>0&&surfaceFactor(r,t)>0);
+  const sel=[];
+  for(const rad of RADII){
+    for(const r of base.filter(x=>x.distance<=rad&&!sel.includes(x)).sort((a,b)=>score(b,t,rad)-score(a,t,rad))){
+      r.score=score(r,t,rad); sel.push(r); if(sel.length>=20)break;
+    }
+    if(sel.length>=6)break;
+  }
+  const ps=sel.map(r=>r.sqmPrice),q1=percentile(ps,.25),q3=percentile(ps,.75),iqr=q3-q1;
+  const keep=iqr?sel.filter(r=>r.sqmPrice>=q1-1.5*iqr&&r.sqmPrice<=q3+1.5*iqr):sel;
+  keep.forEach(r=>r.weight=weight(r,t));
+  return keep.filter(r=>r.weight>0).sort((a,b)=>b.weight-a.weight).slice(0,15);
+}
 function confidence(c,t){if(!c.length)return 0;const avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length,med=median(c.map(r=>r.sqmPrice)),mad=median(c.map(r=>Math.abs(r.sqmPrice-med))),surface=c.reduce((s,r)=>s+Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),0)/c.length;return Math.max(0,Math.min(100,Math.round(Math.min(35,c.length*5)+Math.max(0,25-avgD*7)+Math.max(0,20-avgA*.7)+Math.max(0,20-mad/Math.max(1,med)*100)+surface*10)))}
 function analyze(rows,input,geo){const cfg=TYPES[input.realtyType];if(!cfg)throw Error('Type de bien invalide.');if(['building','other'].includes(input.realtyType))return{manual:true,message:'Ce type n’est pas directement identifiable de façon fiable dans DVF V1. Une méthode dédiée est nécessaire pour éviter d’inventer un prix.'};const area=cfg.area==='land'?input.landArea:input.livingArea,t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0},c=select(rows,t,cfg);if(!c.length)return{manual:true,message:`Pas assez de ventes DVF exploitables pour ${cfg.label} dans les 24 derniers mois et 5 km.`};const sqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight}))),estimate=Math.round(sqm*area/1000)*1000,local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;return{estimate,low:Math.max(0,estimate-20000),high:estimate+20000,rangeEur:20000,confidence:conf,confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',method:'Médiane pondérée des ventes DVF comparables. Le prix propriétaire n’entre jamais dans le calcul.',statistics:{weightedMetric:sqm,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:0,metricLabel:'€/m²'},selection:{retained:c.length,directComparables:c.filter(r=>r.distance<=.75).length,radiusKm:Math.max(...c.map(r=>r.distance)),filter:'24 mois · type identique · IQR 1,5'},sources:[{name:'Ventes DVF comparables',value:estimate,weight:100,reason:`${c.length} ventes réelles retenues après filtrage.`},{name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}],comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}}}
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
