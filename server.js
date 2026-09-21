@@ -501,6 +501,7 @@ function similarityForCompetition(x,input){
 async function searchCompetitionListings(input){
   const rawAddress=String(input.city||input.address||'').trim();
   const city=(rawAddress.match(/\b\d{5}\s+([^,]+)/)||[])[1]?.trim() || rawAddress.replace(/^.*?,/,'').trim();
+  input.city=city;
   const typeLabel={house:'maison',apartment:'appartement',commercial:'local commercial',industrial:'local industriel',garage:'garage',parking:'parking',land:'terrain'}[input.realtyType]||'immobilier';
   const area=n(input.livingArea)||n(input.landArea);
   const rooms=n(input.rooms);
