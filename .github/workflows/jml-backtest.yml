@@ -1,0 +1,21 @@
+name: JML Historical Backtest
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/jml-v1-rebuild]
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tests/backtest.js
+      - run: node tests/real-dvf-matrix.js
+      - run: node tests/model-benchmark.js
+        env:
+          DVF_YEARS: 2025,2024,2023,2022
+          BACKTEST_YEAR: 2025
+          BACKTEST_LIMIT: 100

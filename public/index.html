@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V7 DVF Ardennes</title>
+<title>JML Immobilier — Estimateur V1 DVF Ardennes</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V8 FEUILLE BLANCHE — DVF réelles · tendance locale · écart fixe ±20 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1 PROPRE — DVF réelles · comparables géolocalisés · écart fixe ±20 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -254,7 +254,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const hint = document.createElement('div');
       hint.className = 'hint';
-      hint.textContent = 'Poids dans le calcul : ' + (Number(s.weight)||0) + '%';
+      if (s.role === 'adjustment') {
+        hint.textContent = 'Correction appliquée au socle DVF : ' + (Number(s.delta)>=0?'+':'') + euro(s.delta || 0);
+      } else if (s.role === 'control') {
+        hint.textContent = 'Contrôle uniquement · 0 % dans le calcul';
+      } else {
+        hint.textContent = 'Socle principal · 100 % du calcul';
+      }
 
       const reason = document.createElement('div');
       reason.className = 'hint';
@@ -320,8 +326,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderSources(Array.isArray(d.sources) ? d.sources : []);
     const adjBox=$('adjustments'); clear(adjBox);
-    const p=document.createElement('p'); p.textContent='Corrections JML indicatives : ' + ((Number(d.statistics?.adjustmentPct)||0)*100).toFixed(1) + '%'; adjBox.appendChild(p);
-    (d.adjustments||[]).forEach(a=>{const x=document.createElement('div');x.textContent='• '+a.label+' : '+((Number(a.pct)||0)*100).toFixed(1)+'%';adjBox.appendChild(x);});
+    const p=document.createElement('p');
+    const chars=d.characteristics || {};
+    p.textContent='Critères réellement monétisés par les ventes DVF : ' + ((chars.monetary||[]).join(', ') || '—') + '.';
+    adjBox.appendChild(p);
+    const p2=document.createElement('p');
+    p2.textContent='Caractéristiques renseignées : ' + ((chars.supplied||[]).join(', ') || 'aucune') + '.';
+    adjBox.appendChild(p2);
+    const p3=document.createElement('p');
+    p3.textContent=chars.note || 'Les caractéristiques absentes des données DVF ne sont pas transformées en pourcentages arbitraires.';
+    adjBox.appendChild(p3);
     const warning=$('warning');
     if(d.warning){warning.style.display='block';warning.textContent=d.warning;}else{warning.style.display='none';warning.textContent='';}
     renderTransactions(d.comparables?.data || []);
@@ -355,7 +369,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
       if (!payload.address) throw new Error('L’adresse du bien est obligatoire.');
       if (['house','apartment','building','commercial','industrial'].includes(payload.realtyType) && (!Number.isFinite(payload.livingArea) || payload.livingArea < 10)) {
         throw new Error('La surface bâtie/habitable doit être renseignée.');
