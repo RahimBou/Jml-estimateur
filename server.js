@@ -802,7 +802,7 @@ function listingFromCatalogueText(item,source){
   const code=text.match(cityCodes);
   let locality='';
   if(code){const pos=text.lastIndexOf(code[0]),before=text.slice(Math.max(0,pos-80),pos).trim(),m=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’.-]+(?:[\s-]+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’.-]+){0,4})\s*$/);if(m)locality=m[1].trim();}
-  return {source,sourceType:source.sourceType||'agence',url:item.url,title,snippet,price,area,rooms:rooms[0]||0,landArea:land[0]||0,locality,sqmPrice:area?Math.round(price/area):0,importedAt:new Date().toISOString(),fromCatalogue:true,type};
+  return {source:source.source||source,sourceType:source.sourceType||'agence',url:item.url,title,snippet,price,area,rooms:rooms[0]||0,landArea:land[0]||0,locality,sqmPrice:area?Math.round(price/area):0,importedAt:new Date().toISOString(),fromCatalogue:true,type};
 }
 
 async function enrichCatalogueListing(item){
@@ -838,7 +838,7 @@ async function searchDirectAgencyCatalogues(input,city,typeLabel){
           /(prix|€|m²|maison|appartement|pavillon|terrain|immeuble|local|commerce|garage|parking|loft|studio|duplex)/.test(text);
       }).slice(0,30);
       for(const candidate of candidates){
-        const parsed=listingFromCatalogueText(candidate,source.source); if(!parsed)continue;
+        const parsed=listingFromCatalogueText(candidate,source); if(!parsed)continue;
         const text=norm(parsed.title+' '+parsed.snippet+' '+parsed.locality);
         const parsedType=parsed.type;
         const typeOk=parsedType===input.realtyType;
