@@ -212,7 +212,7 @@ function characteristicAdjustment(input,cfg,baseEstimate){
   };
 }
 
-function characteristicReport(input,cfg,characteristic){
+function characteristicReport(input,cfg,characteristic={note:'Les caractéristiques absentes des données DVF sont traitées séparément avec un ajustement prudent.'}){
   const monetary=[];
   if(cfg===TYPES.house||cfg===TYPES.apartment||cfg===TYPES.commercial||cfg===TYPES.industrial){
     monetary.push('type de bien','surface bâtie','distance géographique','récence de la vente','nombre de pièces');
