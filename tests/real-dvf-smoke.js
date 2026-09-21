@@ -15,5 +15,5 @@ const m=require('../server');
   assert.strictEqual(result.high,result.estimate+20000);
   assert.strictEqual(result.low,Math.max(0,result.estimate-20000));
   assert(result.comparables.data.length>0,'aucun comparable réel');
-  console.log('REAL DVF SMOKE OK',JSON.stringify({estimate:result.estimate,confidence:result.confidence,comparables:result.comparables.data.length,avgDistanceKm:result.statistics.avgDistanceKm,avgAgeMonths:result.statistics.avgAgeMonths,localMedian:result.statistics.localMedian}));
+  console.log('REAL DVF SMOKE OK',JSON.stringify({estimate:result.estimate,confidence:result.confidence,comparables:result.comparables.data.length,avgDistanceKm:result.statistics.avgDistanceKm,avgAgeMonths:result.statistics.avgAgeMonths,localMedian:result.statistics.localMedian,rows:result.comparables.data},null,2));
 })().catch(e=>{console.error('REAL DVF SMOKE FAILED:',e.stack||e);process.exit(1)});
