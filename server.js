@@ -433,21 +433,21 @@ function decodeHtml(s){
     .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
     .replace(/&lt;/g,'<').replace(/&gt;/g,'>');
 }
-function stripHtml(s){return decodeHtml(String(s||'').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim());}
+function stripHtml(s){return decodeHtml(String(s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());}
 function competitionTypeFromText(s){
   const x=norm(s);
-  if(/\\bappartement\\b|\\bt[0-9]\\b|\\bf[0-9]\\b/.test(x))return'apartment';
-  if(/\\bmaison\\b|\\bvilla\\b|\\bpavillon\\b/.test(x))return'house';
-  if(/\\bgarage\\b|\\bdependance\\b/.test(x))return'garage';
-  if(/\\bparking\\b/.test(x))return'parking';
-  if(/\\blocal commercial\\b|\\bcommerce\\b/.test(x))return'commercial';
-  if(/\\bentrepot\\b|\\blocal industriel\\b/.test(x))return'industrial';
-  if(/\\bterrain\\b/.test(x))return'land';
+  if(/\bappartement\b|\bt[0-9]\b|\bf[0-9]\b/.test(x))return'apartment';
+  if(/\bmaison\b|\bvilla\b|\bpavillon\b/.test(x))return'house';
+  if(/\bgarage\b|\bdependance\b/.test(x))return'garage';
+  if(/\bparking\b/.test(x))return'parking';
+  if(/\blocal commercial\b|\bcommerce\b/.test(x))return'commercial';
+  if(/\bentrepot\b|\blocal industriel\b/.test(x))return'industrial';
+  if(/\bterrain\b/.test(x))return'land';
   return'other';
 }
 function extractSearchResultLinks(html){
   const out=[];
-  const re=/<a[^>]+class=["'][^"']*result__a[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi;
+  const re=/<a[^>]+class=["'][^"']*result__a[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m;
   while((m=re.exec(html))){
     let href=decodeHtml(m[1]);
@@ -457,7 +457,7 @@ function extractSearchResultLinks(html){
       href=target?decodeURIComponent(target):href;
     }catch{}
     const title=stripHtml(m[2]);
-    if(/^https?:\\/\\//i.test(href))out.push({url:href,title});
+    if(/^https?:\/\//i.test(href))out.push({url:href,title});
   }
   return out;
 }
@@ -491,7 +491,7 @@ function similarityForCompetition(x,input){
 }
 async function searchCompetitionListings(input){
   const rawAddress=String(input.city||input.address||'').trim();
-  const city=(rawAddress.match(/\\b\\d{5}\\s+([^,]+)/)||[])[1]?.trim() || rawAddress.replace(/^.*?,/,'').trim();
+  const city=(rawAddress.match(/\b\d{5}\s+([^,]+)/)||[])[1]?.trim() || rawAddress.replace(/^.*?,/,'').trim();
   const typeLabel={house:'maison',apartment:'appartement',commercial:'local commercial',industrial:'local industriel',garage:'garage',parking:'parking',land:'terrain'}[input.realtyType]||'immobilier';
   const area=n(input.livingArea)||n(input.landArea);
   const rooms=n(input.rooms);
