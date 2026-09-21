@@ -466,12 +466,70 @@ function extractSearchResultLinks(html){
   }
   return out;
 }
-async function searchWebLinks(query){
-  const u='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)+'&kp=-2';
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+function extractBingSearchResults(html){
+  const out=[];
+  const re=/<li[^>]+class=["'][^"']*b_algo[^"']*["'][^>]*>([\\s\\S]*?)<\\/li>/gi;
+  let m;
+  while((m=re.exec(html))){
+    const block=m[1];
+    const a=block.match(/<h2[^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    if(!a)continue;
+    const href=decodeHtml(a[1]);
+    const title=stripHtml(a[2]);
+    const p=block.match(/<p[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const snippet=stripHtml(p?p[1]:'');
+    if(/^https?:\\/\\//i.test(href))out.push({url:href,title,snippet});
+  }
+  return out;
+}
+async function searchBingLinks(query){
+  const u='https://www.bing.com/search?q='+encodeURIComponent(query)+'&count=10&setlang=fr-FR';
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
   try{
-    const r=await fetch(u,{signal:controller.signal,headers:{'user-agent':'Mozilla/5.0 JML-Estimateur/1.7'}});
-    if(!r.ok)throw Error('Recherche web HTTP '+r.status);
+    const r=await fetch(u,{signal:controller.signal,headers:{'user-agent':'Mozilla/5.0 JML-Estimateur/1.8','accept':'text/html,application/xhtml+xml'}});
+    if(!r.ok)throw Error('Bing HTTP '+r.status);
+    return extractBingSearchResults(await r.text());
+  }catch(e){
+    if(e.name==='AbortError')throw Error('Délai dépassé pendant la recherche web.');
+    throw e;
+  }finally{clearTimeout(timer);}
+}
+function listingFromSearchResult(r){
+  const text=String((r.title||'')+' '+(r.snippet||''));
+  const priceCandidates=[...text.matchAll(/(?:prix\s*[:\-]?\s*)?([0-9]{2,3}(?:[ .\u00a0][0-9]{3})+|[0-9]{5,6})\s*€/gi)]
+    .map(m=>parseLooseNumber(m[1])).filter(x=>x>=10000&&x<=10000000);
+  const sqmCandidates=[...text.matchAll(/([0-9]{2,4}(?:[.,][0-9]+)?)\s*m²/gi)]
+    .map(m=>parseLooseNumber(m[1])).filter(x=>x>=15&&x<=5000);
+  const roomCandidates=[...text.matchAll(/(?:T|F)?\s*([1-9][0-9]?)\s*(?:pièces?|p\.)/gi)]
+    .map(m=>Number(m[1])).filter(x=>x>0&&x<30);
+  const landCandidates=[...text.matchAll(/(?:terrain|parcelle)[^0-9]{0,30}([0-9]{2,5}(?:[.,][0-9]+)?)\s*m²/gi)]
+    .map(m=>parseLooseNumber(m[1])).filter(x=>x>=20&&x<=100000);
+  const price=priceCandidates[0]||0, area=sqmCandidates[0]||0;
+  if(!price||!area)return null;
+  const rooms=roomCandidates[0]||0;
+  const landArea=landCandidates[0]||0;
+  let locality='';
+  const lm=text.match(/([A-ZÀ-Ÿ][^,|]{2,60})\s*\(?(?:0[0-9]|[1-9][0-9]){2}\)?/);
+  if(lm)locality=lm[1].trim();
+  return {
+    source:new URL(r.url).hostname.replace(/^www\./,''),
+    url:r.url,title:r.title||'Annonce immobilière',snippet:r.snippet||'',
+    price,area,rooms,landArea,locality,
+    sqmPrice:Math.round(price/area),
+    importedAt:new Date().toISOString(),
+    fromSearch:true
+  };
+}
+async function searchWebLinks(query){
+  try{
+    const bing=await searchBingLinks(query);
+    if(bing.length)return bing;
+  }catch{}
+  const u='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)+'&kp=-2';
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+  try{
+    const r=await fetch(u,{signal:controller.signal,headers:{'user-agent':'Mozilla/5.0 JML-Estimateur/1.8'}});
+    if(!r.ok)throw Error('Recherche HTTP '+r.status);
     return extractSearchResultLinks(await r.text());
   }catch(e){
     if(e.name==='AbortError')throw Error('Délai dépassé pendant la recherche des annonces actuelles.');
@@ -526,13 +584,8 @@ async function searchCompetitionListings(input){
     }
     if(found.length>=25)break;
   }
-  const checked=await Promise.all(found.slice(0,15).map(async l=>{
-    try{
-      const x=await importCompetitionListing(l.url);
-      return similarityForCompetition({...x,title:x.title||l.title},input);
-    }catch{return null;}
-  }));
-  const listings=checked.filter(Boolean).slice(0,10);
+  const searchListings=found.map(l=>listingFromSearchResult(l)).filter(Boolean);
+  const listings=searchListings.map(x=>similarityForCompetition(x,input)).filter(Boolean).slice(0,10);
   const unique=new Map();
   for(const x of listings){
     const key=[x.source,x.price,x.area,x.landArea||0,x.rooms,norm(x.locality)].join('|');
@@ -543,7 +596,7 @@ async function searchCompetitionListings(input){
 
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))}
-function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:p.city||''}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();send(res,200,analyze(rows,input,geo))}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1 sur http://localhost:${port}`))}
+function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:p.city||'',source:'moteur de recherche web + annonces publiques indexées'}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();send(res,200,analyze(rows,input,geo))}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1 sur http://localhost:${port}`))}
 function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
