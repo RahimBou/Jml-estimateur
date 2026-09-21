@@ -2,6 +2,8 @@ name: JML V1 Selftest
 on:
   push:
     branches: [codex/jml-v1-rebuild]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   test:
@@ -11,5 +13,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm test --if-present
+      - run: npm install
       - run: node tests/selftest.js
