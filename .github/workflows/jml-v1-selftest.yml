@@ -19,3 +19,4 @@ jobs:
       - run: node tests/real-dvf-smoke.js
       - run: node tests/real-dvf-matrix.js
       - run: node tests/model-benchmark.js
+      - run: node tests/consolidation-audit.js
