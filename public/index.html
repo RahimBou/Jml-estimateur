@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V1.1 DVF Ardennes</title>
+<title>JML Immobilier — Estimateur V1.2 DVF Ardennes</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.1 — DVF réelles · calibration transparente · caractéristiques documentées · écart fixe ±7 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.2 — DVF réelles · cœur de comparabilité · calibration transparente · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -256,6 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
       hint.className = 'hint';
       if (s.role === 'adjustment') {
         hint.textContent = 'Correction appliquée au socle DVF : ' + (Number(s.delta)>=0?'+':'') + euro(s.delta || 0);
+      } else if (s.role === 'cohort') {
+        hint.textContent = 'Cœur de comparabilité · utilisé comme socle si suffisamment fourni';
       } else if (s.role === 'control') {
         hint.textContent = 'Contrôle uniquement · 0 % dans le calcul';
       } else {
@@ -311,7 +313,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
     setText('window', (d.selection?.radiusKm ?? '—') + ' km');
-    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
+    setText('selection',
+      (d.selection?.directComparables || 0) + ' comparables directs · ' +
+      (d.selection?.retained || 0) + ' retenus · ' +
+      (d.selection?.primaryComparables || 0) + ' dans le cœur de surface · filtre ' +
+      (d.selection?.filter || '—')
+    );
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
     if (d.statistics?.trendAnnualPct != null) {
       const t = Number(d.statistics.trendAnnualPct);
@@ -334,7 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
     p2.textContent='Caractéristiques renseignées : ' + ((chars.supplied||[]).join(', ') || 'aucune') + '.';
     adjBox.appendChild(p2);
     const p3=document.createElement('p');
-    p3.textContent=chars.note || 'Les caractéristiques absentes des données DVF ne sont pas transformées en pourcentages arbitraires.';
+    p3.textContent=(chars.note || 'Les caractéristiques absentes des données DVF ne sont pas transformées en pourcentages arbitraires.') +
+      ' V1.2 : lorsqu’il existe au moins 3 ventes DVF suffisamment proches en surface et à moins de 750 m, ce cœur de comparabilité devient le socle ; les autres ventes restent des contrôles de cohérence.';
     adjBox.appendChild(p3);
     const warning=$('warning');
     if(d.warning){warning.style.display='block';warning.textContent=d.warning;}else{warning.style.display='none';warning.textContent='';}
