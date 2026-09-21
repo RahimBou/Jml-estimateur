@@ -448,23 +448,42 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!button)return;
     button.disabled=true;
     if(error){error.textContent='🔎 Recherche des annonces actuelles similaires en cours…';error.className='hint';}
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),30000);
     try{
-      const r=await fetch('/api/competition/search',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(payload)});
+      const r=await fetch('/api/competition/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        cache:'no-store',
+        signal:controller.signal,
+        body:JSON.stringify(payload)
+      });
       const d=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(d.error||'La recherche des annonces actuelles a échoué.');
       competition=Array.isArray(d.listings)?d.listings:[];
       renderCompetition();
       if(error){
-        error.textContent=competition.length
-          ? '✅ '+competition.length+' bien(s) actuellement en vente retenu(s) après filtrage de similarité.'
-          : 'Aucune annonce suffisamment similaire trouvée dans les sources accessibles.';
+        if(competition.length){
+          error.textContent='✅ '+competition.length+' bien(s) actuellement en vente retenu(s) après filtrage de similarité.';
+        }else{
+          const city=d.diagnostic?.city || payload.city || '';
+          error.textContent='Aucune annonce suffisamment similaire trouvée dans les sources accessibles'+(city?' pour '+city:'')+'.';
+        }
         error.className='hint';
       }
     }catch(e){
       competition=[];
       renderCompetition();
-      if(error){error.textContent=e.message||'Recherche impossible.';error.className='error';}
-    }finally{button.disabled=false;}
+      if(error){
+        error.textContent=e.name==='AbortError'
+          ? '⏱️ La recherche a dépassé 30 secondes. Relancez la recherche.'
+          : (e.message||'Recherche impossible.');
+        error.className='error';
+      }
+    }finally{
+      clearTimeout(timeout);
+      button.disabled=false;
+    }
   }
 
   $('competitionSearch')?.addEventListener('click',()=>{if(lastAnalysisPayload)searchCompetition(lastAnalysisPayload);});
