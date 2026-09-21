@@ -291,10 +291,12 @@ function analyze(rows,input,geo){
   return{
     estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
-    method:(model.method==='cœur de comparabilité par surface'
+    method:(model.method==='centre local de marché cohérent'
+      ?'Centre local de marché robuste V1.6 : lorsque le cœur de surface est hétérogène et nettement sous la médiane locale, cette médiane devient le centre du socle. La calibration historique est alors volontairement neutralisée pour éviter un double biais.'
+      :model.method==='cœur de comparabilité par surface'
       ?'Cœur de comparabilité DVF V1.3 : priorité aux ventes de même type, même rue si identifiable, proches géographiquement et surtout à surface proche, puis calibration historique hors échantillon.'
       :'Médiane pondérée des ventes DVF comparables : le cœur de surface est insuffisant pour constituer le socle.')+
-      ' Puis calibration historique et couche caractéristiques séparée (plafond ±10 %). Le prix propriétaire n’entre jamais dans le calcul.',
+      ' Puis couche caractéristiques séparée (plafond ±10 %). Le prix propriétaire n’entre jamais dans le calcul.',
     statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibrationApplied?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:calibratedEstimate-baseEstimate,characteristicAdjustmentPct:characteristics.pct,characteristicDelta:characteristics.delta,finalEstimate:estimate,metricLabel:'€/m²',localCenterUsed:!!model.localCenterUsed,localMedianSqm:model.localMedianSqm??null,primaryDispersion:model.primaryDispersion??null,localDivergence:model.localDivergence??null},
     calibration:{applied:calibrationApplied,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test',suppressed:calibration.usable&&!calibrationApplied,suppressedReason:model.localCenterUsed?'Centre local robuste activé : le signal actuel des ventes locales prime sur la correction historique.':null},
     characteristics:characteristicReport(input,cfg,characteristics),
@@ -316,7 +318,7 @@ function analyze(rows,input,geo){
         {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
       ]:[]),
       ...(calibrationApplied?[{name:'Calibration historique',value:calibratedEstimate,weight:0,role:'adjustment',delta:calibratedEstimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
-      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'},
+      {name:model.localCenterUsed?'Médiane locale de marché':'Médiane locale de contrôle',value:Math.round(local*area),weight:model.localCenterUsed?100:0,role:model.localCenterUsed?'market':'control',reason:model.localCenterUsed?'Centre robuste réellement utilisé dans le calcul : médiane des ventes DVF retenues.':'Contrôle de cohérence uniquement, jamais ajoutée au prix.'},
       ...(characteristics.applied?[{
         name:'Caractéristiques du bien',
         value:estimate,
