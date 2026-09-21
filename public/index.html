@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.1 PRO — DVF géolocalisées · moteur multi-types · sans crédits Immo Data</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V8 FEUILLE BLANCHE — DVF réelles · tendance locale · écart fixe ±20 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -76,7 +76,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 
 <section id="result" class="result">
 <div class="card hero">
-<div class="hint">Estimation JML — DVF</div>
+<div class="hint">Estimation JML — DVF réelles</div>
 <div id="main" class="price">—</div>
 <div id="range" class="range">—</div>
 <div id="confidence" class="confidence">Fiabilité : —/5</div>
@@ -256,7 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
       hint.className = 'hint';
       hint.textContent = 'Poids dans le calcul : ' + (Number(s.weight)||0) + '%';
 
-      box.append(top, bar, hint);
+      const reason = document.createElement('div');
+      reason.className = 'hint';
+      reason.textContent = s.reason || '';
+
+      box.append(top, bar, hint, reason);
       container.appendChild(box);
     });
   }
@@ -295,14 +299,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.estimate == null) throw new Error('Réponse serveur incomplète : estimation absente.');
     estimateValue = Number(d.estimate) || 0;
     setText('main', euro(d.estimate));
-    setText('range', 'Fourchette indicative : ' + euro(d.low) + ' → ' + euro(d.high));
+    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 20000) + ')');
     setText('confidence', 'Fiabilité : ' + (d.confidence ?? '—') + '/100 · ' + (d.confidenceLevel || '—'));
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
-    setText('window', '≤ ' + (d.selection?.maxAgeMonths ?? 24) + ' mois');
-    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · ≤ ' + (d.selection?.maxAgeMonths ?? 24) + ' mois · filtre ' + (d.selection?.filter || '—')); 
+    setText('window', (d.selection?.radiusKm ?? '—') + ' km');
+    setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
+    if (d.statistics?.trendAnnualPct != null) {
+      const t = Number(d.statistics.trendAnnualPct);
+      const q = d.statistics.trendQuality || '—';
+      const note = document.createElement('div');
+      note.className = 'footer-note';
+      note.textContent = 'Tendance locale utilisée pour remettre les ventes anciennes à la date d’analyse : ' +
+        (t >= 0 ? '+' : '') + t.toFixed(1) + '%/an · qualité ' + q +
+        '. Elle ne constitue pas une deuxième estimation.';
+      $('method').appendChild(document.createTextNode(' '));
+      $('method').appendChild(note);
+    }
     renderSources(Array.isArray(d.sources) ? d.sources : []);
     const adjBox=$('adjustments'); clear(adjBox);
     const p=document.createElement('p'); p.textContent='Corrections JML indicatives : ' + ((Number(d.statistics?.adjustmentPct)||0)*100).toFixed(1) + '%'; adjBox.appendChild(p);
