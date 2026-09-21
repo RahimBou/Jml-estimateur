@@ -46,11 +46,29 @@ function surfaceFactor(r,t){
   const logGap=Math.abs(Math.log(Math.max(ratio,0.45)));
   return Math.max(0.05,Math.min(1,Math.exp(-Math.pow(logGap/0.25,2))));
 }
+function surfaceSimilarityWeight(r,t){
+  const ratio=Math.min(r.area,t.area)/Math.max(r.area,t.area);
+  if(ratio<.45)return 0;
+  const gap=Math.abs(Math.log(Math.max(ratio,.45)));
+  // V1.3 : la proximité de surface devient une hiérarchie forte.
+  // Une vente quasi-jumelle doit peser nettement plus qu'une vente
+  // beaucoup plus petite ou plus grande.
+  return Math.max(.02,Math.min(1,Math.exp(-Math.pow(gap/.18,2))));
+}
+function streetSimilarityWeight(r,t){
+  if(!t.streetHint||!r.streetName)return 1;
+  const a=norm(t.streetHint),b=norm(r.streetName);
+  if(!a||!b)return 1;
+  // On ne donne le bonus que si le nom de rue DVF est réellement
+  // retrouvé dans l'adresse saisie, pour éviter les faux positifs.
+  return a.includes(b)||b.includes(a)?1.25:1;
+}
 function weight(r,t){
   const sf=surfaceFactor(r,t); if(!sf)return 0;
+  const sw=surfaceSimilarityWeight(r,t); if(!sw)return 0;
   const roomFactor=t.rooms&&r.rooms?Math.max(.45,1-Math.abs(t.rooms-r.rooms)*.10):.8;
   const landFactor=t.landArea&&r.landArea?Math.max(.45,Math.min(1,Math.min(t.landArea,r.landArea)/Math.max(t.landArea,r.landArea))):.85;
-  return sf*rw(r.age)*Math.exp(-r.distance/.60)*roomFactor*landFactor*(0.55+r.score/220);
+  return sf*sw*rw(r.age)*Math.exp(-r.distance/.60)*roomFactor*landFactor*streetSimilarityWeight(r,t)*(0.55+r.score/220);
 }
 function selectFromBase(base,t,asOf=Date.now()){
   const usable=base.map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date),asOf)}))
@@ -154,7 +172,7 @@ function analyze(rows,input,geo){
   if(!cfg)throw Error('Type de bien invalide.');
   if(['building','other'].includes(input.realtyType))return{manual:true,message:'Ce type n’est pas directement identifiable de façon fiable dans DVF V1. Une méthode dédiée est nécessaire pour éviter d’inventer un prix.'};
   const area=cfg.area==='land'?input.landArea:input.livingArea;
-  const t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0,type:input.realtyType};
+  const t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0,type:input.realtyType,streetHint:input.address||''};
   const asOf=Date.now();
   const c=select(rows,t,cfg,asOf);
   if(!c.length)return{manual:true,message:'Pas assez de ventes DVF exploitables pour '+cfg.label+' dans les 24 derniers mois et 5 km.'};
@@ -167,7 +185,7 @@ function analyze(rows,input,geo){
     estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
     method:(model.method==='cœur de comparabilité par surface'
-      ?'Cœur de comparabilité DVF : priorité aux ventes de même type, proches géographiquement et à surface proche, puis calibration historique hors échantillon.'
+      ?'Cœur de comparabilité DVF V1.3 : priorité aux ventes de même type, même rue si identifiable, proches géographiquement et surtout à surface proche, puis calibration historique hors échantillon.'
       :'Médiane pondérée des ventes DVF comparables : le cœur de surface est insuffisant pour constituer le socle.')+
       ' Le prix propriétaire n’entre jamais dans le calcul.',
     statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:estimate-baseEstimate,finalEstimate:estimate,metricLabel:'€/m²'},
@@ -178,11 +196,11 @@ function analyze(rows,input,geo){
       primaryComparables:model.primary.length,
       primarySurfaceRatio:t.type==='apartment'?.80:t.type==='house'?.75:.70,
       radiusKm:Math.max(...c.map(r=>r.distance)),
-      filter:'24 mois · type identique · IQR 1,5 · cœur surface ≥ '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %'
+      filter:'24 mois · type identique · IQR 1,5 · cœur surface ≥ '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' % · surface hiérarchisée'
     },
     sources:[
       {name:model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='cœur de comparabilité par surface'
-        ?model.primary.length+' ventes dans le cœur de surface, sur '+c.length+' comparables DVF retenus.'
+        ?model.primary.length+' ventes dans le cœur de surface, avec poids renforcé selon la proximité exacte de surface et, si identifiable, de la rue, sur '+c.length+' comparables DVF retenus.'
         :c.length+' ventes réelles retenues après filtrage ; le cœur de surface ne contient que '+model.primary.length+' vente(s).'},
       ...(model.primary.length?[
         {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
