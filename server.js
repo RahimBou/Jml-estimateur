@@ -503,27 +503,26 @@ async function searchCompetitionListings(input){
     if(rooms)bits.push(String(rooms)+' pièces');
     return bits.join(' ');
   });
+  const searchBatches=await Promise.all(queries.map(q=>searchWebLinks(q).catch(()=>[])));
   const found=[];
-  for(const q of queries){
-    let links=[];
-    try{links=await searchWebLinks(q);}catch{continue;}
+  for(const links of searchBatches){
     for(const l of links){
-      if(!competitionHostAllowed(new URL(l.url).hostname))continue;
+      try{
+        if(!competitionHostAllowed(new URL(l.url).hostname))continue;
+      }catch{continue;}
       if(found.some(x=>x.url===l.url))continue;
       found.push(l);
       if(found.length>=25)break;
     }
     if(found.length>=25)break;
   }
-  const listings=[];
-  for(const l of found.slice(0,20)){
+  const checked=await Promise.all(found.slice(0,15).map(async l=>{
     try{
       const x=await importCompetitionListing(l.url);
-      const y=similarityForCompetition({...x,title:x.title||l.title},input);
-      if(y)listings.push(y);
-    }catch{}
-    if(listings.length>=10)break;
-  }
+      return similarityForCompetition({...x,title:x.title||l.title},input);
+    }catch{return null;}
+  }));
+  const listings=checked.filter(Boolean).slice(0,10);
   const unique=new Map();
   for(const x of listings){
     const key=[x.source,x.price,x.area,x.rooms,norm(x.locality)].join('|');
