@@ -124,6 +124,14 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <button id="competitionImport" type="button">IMPORTER L’ANNONCE</button>
 </div>
 <p id="competitionError" class="error"></p>
+<div class="competition-tools" style="margin-top:12px">
+  <input id="manualCompetitionPrice" type="number" min="0" placeholder="Prix affiché (€)">
+  <input id="manualCompetitionArea" type="number" min="1" placeholder="Surface (m²)">
+  <input id="manualCompetitionRooms" type="number" min="0" placeholder="Pièces">
+  <input id="manualCompetitionLocality" type="text" placeholder="Quartier / secteur">
+  <button id="manualCompetitionAdd" type="button">AJOUTER MANUELLEMENT</button>
+</div>
+
 <div id="competitionSummary" class="competition-summary"></div>
 <div class="tablewrap">
 <table class="competition-table"><thead><tr><th>Source</th><th>Prix</th><th>Surface</th><th>€/m²</th><th>Pièces</th><th>Secteur</th></tr></thead><tbody id="competitionBody"></tbody></table>
@@ -447,6 +455,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if(error){error.textContent=e.message||'Import impossible.';error.className='error';}
     }finally{button.disabled=false;}
   }
+
+  $('manualCompetitionAdd')?.addEventListener('click',()=>{
+    const price=Number($('manualCompetitionPrice')?.value||0);
+    const area=Number($('manualCompetitionArea')?.value||0);
+    const rooms=Number($('manualCompetitionRooms')?.value||0);
+    const locality=String($('manualCompetitionLocality')?.value||'').trim();
+    const error=$('competitionError');
+    if(price<10000||area<15){
+      if(error){error.textContent='Pour une saisie manuelle, indiquez au minimum un prix ≥ 10 000 € et une surface ≥ 15 m².';error.className='error';}
+      return;
+    }
+    competition.push({source:'Saisie manuelle',url:'',title:'Annonce concurrente',price,area,rooms,locality,sqmPrice:Math.round(price/area),importedAt:new Date().toISOString()});
+    $('manualCompetitionPrice').value='';
+    $('manualCompetitionArea').value='';
+    $('manualCompetitionRooms').value='';
+    $('manualCompetitionLocality').value='';
+    renderCompetition();
+  });
   $('competitionImport')?.addEventListener('click',importCompetition);
   $('competitionUrl')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();importCompetition();}});
   $('competitionClear')?.addEventListener('click',()=>{competition.length=0;renderCompetition();});
