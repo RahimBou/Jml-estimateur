@@ -15,6 +15,9 @@ assert.strictEqual(direct.low,direct.estimate-20000);
 assert(direct.comparables.data.length>=4);
 assert(direct.confidence>=0&&direct.confidence<=100);
 assert(direct.method.includes('prix propriétaire'));
+assert(direct.calibration && Number.isFinite(direct.calibration.factor));
+assert(direct.statistics.baseEstimate>0);
+assert(direct.estimate>0);
 const server=m.startServer(0),port=server.address().port;
 new Promise((resolve,reject)=>{
  const r=http.request({hostname:'127.0.0.1',port,path:'/api/analyze',method:'POST',headers:{'content-type':'application/json'}},res=>{
