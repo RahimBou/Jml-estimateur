@@ -30,6 +30,30 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 .tx{width:100%;border-collapse:collapse;font-size:12px}.tx th,.tx td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.tx th{font-size:11px;color:var(--muted)}.tablewrap{overflow:auto}
 .compare{display:none;margin-top:16px}.comparison{background:var(--soft);padding:14px;border-radius:10px;line-height:1.6}.footer-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:16px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.checks{grid-template-columns:repeat(2,1fr)}.facts{grid-template-columns:1fr 1fr}.price{font-size:34px}}
+
+.competition-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.competition-tools input{min-width:0}
+.competition-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.competition-actions button,.print-btn{padding:10px 14px;border:0;border-radius:10px;cursor:pointer;font-weight:700}
+.competition-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.92rem}
+.competition-table th,.competition-table td{padding:8px;border-bottom:1px solid rgba(0,0,0,.08);text-align:left}
+.competition-table th{font-size:.8rem;text-transform:uppercase}
+.competition-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.competition-kpi{padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:12px}
+.competition-kpi b{display:block;font-size:1.05rem}
+.competition-kpi span{display:block;font-size:.78rem;opacity:.7}
+.competition-note{font-size:.85rem;opacity:.75}
+@media(max-width:700px){.competition-tools{grid-template-columns:1fr}.competition-summary{grid-template-columns:1fr}.competition-table{font-size:.8rem}}
+@media print{
+  body{background:#fff!important}
+  form,#showCompare,#compare,.competition-tools,.competition-actions,.no-print{display:none!important}
+  #result{display:block!important}
+  .card{break-inside:avoid;box-shadow:none!important}
+  .competition-table{font-size:10pt}
+  .print-only{display:block!important}
+}
+.print-only{display:none}
+
 </style>
 </head>
 <body>
@@ -90,6 +114,26 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
 <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
+
+
+<div class="card" id="competitionCard">
+<h2>🏷️ Concurrence actuelle</h2>
+<p class="hint">Les prix affichés par les annonces servent uniquement à comparer le marché actuellement proposé. <b>Ils ne modifient jamais l’estimation DVF.</b></p>
+<div class="competition-tools">
+<input id="competitionUrl" type="url" placeholder="Collez l’URL d’une annonce SeLoger, Leboncoin, Bien’ici, Logic-Immo ou PAP">
+<button id="competitionImport" type="button">IMPORTER L’ANNONCE</button>
+</div>
+<p id="competitionError" class="error"></p>
+<div id="competitionSummary" class="competition-summary"></div>
+<div class="tablewrap">
+<table class="competition-table"><thead><tr><th>Source</th><th>Prix</th><th>Surface</th><th>€/m²</th><th>Pièces</th><th>Secteur</th></tr></thead><tbody id="competitionBody"></tbody></table>
+</div>
+<div class="competition-actions">
+<button id="competitionClear" type="button">EFFACER LA CONCURRENCE</button>
+<button id="printReport" type="button" class="print-btn">📄 IMPRIMER / ENREGISTRER EN PDF</button>
+</div>
+<p class="competition-note">Import automatique : le prix et la surface sont lus depuis la page publique de l’annonce lorsque le site l’autorise. Si l’import échoue, on pourra ajouter une saisie manuelle dans l’étape suivante.</p>
+</div>
 
 <div class="card">
 <h2>🔒 Maintenant, parlons de votre prix</h2>
@@ -354,7 +398,62 @@ document.addEventListener('DOMContentLoaded', () => {
     result.style.display='block'; result.scrollIntoView({behavior:'smooth'});
   }
 
-  form.addEventListener('submit', async event => {
+  
+  const competition = [];
+  function renderCompetition(){
+    const body=$('competitionBody'), summary=$('competitionSummary'), error=$('competitionError');
+    if(!body||!summary)return;
+    clear(body); clear(summary);
+    if(error){error.textContent='';error.className='error';}
+    if(!competition.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');
+      td.colSpan=6;td.textContent='Aucune annonce concurrente importée pour le moment.';tr.appendChild(td);body.appendChild(tr);
+      return;
+    }
+    const prices=competition.map(x=>Number(x.price)).filter(x=>x>0);
+    const sqm=competition.map(x=>Number(x.sqmPrice)).filter(x=>x>0).sort((a,b)=>a-b);
+    const med=sqm.length?(sqm.length%2?sqm[(sqm.length-1)/2]:(sqm[sqm.length/2-1]+sqm[sqm.length/2])/2):0;
+    const min=Math.min(...prices),max=Math.max(...prices);
+    [
+      ['Annonces importées',competition.length,'biens retenus'],
+      ['Prix affichés',euro(min)+' → '+euro(max),'fourchette observée'],
+      ['Médiane €/m²',Math.round(med)+' €/m²','annonces importées']
+    ].forEach(a=>{
+      const d=document.createElement('div');d.className='competition-kpi';
+      const b=document.createElement('b');b.textContent=a[1];
+      const s=document.createElement('span');s.textContent=a[0]+' · '+a[2];
+      d.append(b,s);summary.appendChild(d);
+    });
+    competition.forEach(x=>{
+      const tr=document.createElement('tr');
+      [x.source,euro(x.price),Math.round(x.area)+' m²',Math.round(x.sqmPrice)+' €/m²',x.rooms?String(x.rooms):'—',x.locality||'—'].forEach(v=>appendCell(tr,v));
+      body.appendChild(tr);
+    });
+  }
+  async function importCompetition(){
+    const input=$('competitionUrl'),button=$('competitionImport'),error=$('competitionError');
+    const url=input?.value.trim();
+    if(!url)return;
+    button.disabled=true;
+    if(error){error.textContent='Import de l’annonce en cours…';error.className='hint';}
+    try{
+      const r=await fetch('/api/competition/import',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({url})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||'Impossible d’importer cette annonce.');
+      competition.push(d);
+      input.value='';
+      renderCompetition();
+    }catch(e){
+      if(error){error.textContent=e.message||'Import impossible.';error.className='error';}
+    }finally{button.disabled=false;}
+  }
+  $('competitionImport')?.addEventListener('click',importCompetition);
+  $('competitionUrl')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();importCompetition();}});
+  $('competitionClear')?.addEventListener('click',()=>{competition.length=0;renderCompetition();});
+  $('printReport')?.addEventListener('click',()=>window.print());
+  renderCompetition();
+
+form.addEventListener('submit', async event => {
     event.preventDefault();
 
     errorBox.textContent = '';
