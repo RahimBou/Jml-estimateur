@@ -116,17 +116,40 @@ function weightedMean(rows){
 function estimateFromComparables(c,t,details=false){
   if(!c.length)return details?{estimate:0,method:'none',primary:[]}:0;
   const globalSqm=wmedian(c.map(r=>({value:r.sqmPrice,weight:r.weight})));
+  const localMedianSqm=median(c.map(r=>r.sqmPrice));
   const primary=primaryComparables(c,t);
-  // Dès que le cœur contient au moins 3 ventes, il devient le socle :
-  // moyenne pondérée par récence, distance, pièces et surface.
-  // La médiane élargie reste disponible comme contrôle.
+
   if(primary.length>=3){
     const primarySqm=weightedMean(primary.map(r=>({value:r.sqmPrice,weight:r.weight})));
-    const estimate=Math.round(primarySqm*t.area/1000)*1000;
-    return details?{estimate,method:'cœur de comparabilité par surface',primary,globalSqm,primarySqm}:estimate;
+    const primaryMedian=median(primary.map(r=>r.sqmPrice));
+    const primaryMad=median(primary.map(r=>Math.abs(r.sqmPrice-primaryMedian)));
+    const dispersion=primaryMedian>0?primaryMad/primaryMedian:0;
+    const divergence=localMedianSqm>0?(localMedianSqm-primarySqm)/localMedianSqm:0;
+
+    // V1.6 : lorsqu'un petit cœur local est hétérogène et que sa moyenne
+    // pondérée est nettement sous le niveau médian des ventes retenues,
+    // la médiane locale devient le centre robuste du marché.
+    // Cela évite qu'un petit groupe de ventes basses écrase deux ventes
+    // très comparables dans une même micro-zone.
+    const localCenterUsed=dispersion>=0.10&&divergence>=0.12&&localMedianSqm>primarySqm;
+    const chosenSqm=localCenterUsed?localMedianSqm:primarySqm;
+    const estimate=Math.round(chosenSqm*t.area/1000)*1000;
+
+    return details?{
+      estimate,
+      method:localCenterUsed?'centre local de marché cohérent':'cœur de comparabilité par surface',
+      primary,
+      globalSqm,
+      primarySqm,
+      localMedianSqm,
+      primaryDispersion:dispersion,
+      localDivergence:divergence,
+      localCenterUsed
+    }:estimate;
   }
+
   const estimate=Math.round(globalSqm*t.area/1000)*1000;
-  return details?{estimate,method:'médiane pondérée élargie',primary,globalSqm,primarySqm:null}:estimate;
+  return details?{estimate,method:'médiane pondérée élargie',primary,globalSqm,primarySqm:null,localMedianSqm,localCenterUsed:false}:estimate;
 }
 function learnCorrection(rows,cfg,target){
   const all=consolidate(rows,cfg);
@@ -260,7 +283,8 @@ function analyze(rows,input,geo){
   const model=estimateFromComparables(c,t,true);
   const baseEstimate=model.estimate;
   const calibration=learnCorrection(rows,cfg,{...t,asOf});
-  const calibratedEstimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
+  const calibrationApplied=calibration.usable&&!model.localCenterUsed;
+  const calibratedEstimate=calibrationApplied?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
   const characteristics=characteristicAdjustment(input,cfg,calibratedEstimate);
   const estimate=characteristics.finalEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
@@ -271,8 +295,8 @@ function analyze(rows,input,geo){
       ?'Cœur de comparabilité DVF V1.3 : priorité aux ventes de même type, même rue si identifiable, proches géographiquement et surtout à surface proche, puis calibration historique hors échantillon.'
       :'Médiane pondérée des ventes DVF comparables : le cœur de surface est insuffisant pour constituer le socle.')+
       ' Puis calibration historique et couche caractéristiques séparée (plafond ±10 %). Le prix propriétaire n’entre jamais dans le calcul.',
-    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:calibratedEstimate-baseEstimate,characteristicAdjustmentPct:characteristics.pct,characteristicDelta:characteristics.delta,finalEstimate:estimate,metricLabel:'€/m²'},
-    calibration:{applied:calibration.usable,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test'},
+    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibrationApplied?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:calibratedEstimate-baseEstimate,characteristicAdjustmentPct:characteristics.pct,characteristicDelta:characteristics.delta,finalEstimate:estimate,metricLabel:'€/m²',localCenterUsed:!!model.localCenterUsed,localMedianSqm:model.localMedianSqm??null,primaryDispersion:model.primaryDispersion??null,localDivergence:model.localDivergence??null},
+    calibration:{applied:calibrationApplied,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test',suppressed:calibration.usable&&!calibrationApplied,suppressedReason:model.localCenterUsed?'Centre local robuste activé : le signal actuel des ventes locales prime sur la correction historique.':null},
     characteristics:characteristicReport(input,cfg,characteristics),
     selection:{
       retained:c.length,
@@ -283,13 +307,15 @@ function analyze(rows,input,geo){
       filter:'24 mois · type identique · IQR 1,5 · cœur surface ≥ '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' % · surface hiérarchisée'
     },
     sources:[
-      {name:model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='cœur de comparabilité par surface'
+      {name:model.method==='centre local de marché cohérent'?'Base DVF — centre local cohérent':model.method==='cœur de comparabilité par surface'?'Base DVF — cœur de comparabilité':'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:model.method==='centre local de marché cohérent'?
+        ?model.primary.length+' ventes dans le cœur de surface, mais une dispersion locale a déclenché un centre robuste basé sur la médiane des '+c.length+' ventes retenues : '+Math.round(model.localMedianSqm)+' €/m².'
+        :model.method==='cœur de comparabilité par surface'
         ?model.primary.length+' ventes dans le cœur de surface, avec poids renforcé selon la proximité exacte de surface et, si identifiable, de la rue, sur '+c.length+' comparables DVF retenus.'
         :c.length+' ventes réelles retenues après filtrage ; le cœur de surface ne contient que '+model.primary.length+' vente(s).'},
       ...(model.primary.length?[
         {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
       ]:[]),
-      ...(calibration.usable?[{name:'Calibration historique',value:calibratedEstimate,weight:0,role:'adjustment',delta:calibratedEstimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
+      ...(calibrationApplied?[{name:'Calibration historique',value:calibratedEstimate,weight:0,role:'adjustment',delta:calibratedEstimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
       {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'},
       ...(characteristics.applied?[{
         name:'Caractéristiques du bien',
