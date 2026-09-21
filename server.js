@@ -197,7 +197,8 @@ function characteristicAdjustment(input,cfg,baseEstimate){
   // jamais écraser le signal des ventes DVF.
   const raw=items.reduce((sum,x)=>sum+x.pct,0);
   const pct=Math.max(-10,Math.min(10,raw));
-  const adjusted=Math.round(baseEstimate*(1+pct/100)/1000)*1000;
+  const characteristicDelta=Math.round((baseEstimate*pct/100)/1000)*1000;
+  const adjusted=baseEstimate+characteristicDelta;
 
   return {
     applied:items.length>0,
@@ -205,7 +206,8 @@ function characteristicAdjustment(input,cfg,baseEstimate){
     pct,
     baseEstimate,
     adjustedEstimate:adjusted,
-    delta:adjusted-baseEstimate,
+    delta:characteristicDelta,
+    finalEstimate:adjusted,
     items,
     capPct:10,
     note:'Couche complémentaire prudente : les caractéristiques absentes de DVF sont appliquées séparément et plafonnées à ±10 %. Le terrain n’est pas ajouté une seconde fois car il participe déjà à la comparabilité DVF lorsqu’il est disponible.'
@@ -255,7 +257,7 @@ function analyze(rows,input,geo){
   const calibration=learnCorrection(rows,cfg,{...t,asOf});
   const calibratedEstimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
   const characteristics=characteristicAdjustment(input,cfg,calibratedEstimate);
-  const estimate=characteristics.adjustedEstimate;
+  const estimate=characteristics.finalEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
   return{
     estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
@@ -282,7 +284,7 @@ function analyze(rows,input,geo){
       ...(model.primary.length?[
         {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
       ]:[]),
-      ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,role:'adjustment',delta:estimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
+      ...(calibration.usable?[{name:'Calibration historique',value:calibratedEstimate,weight:0,role:'adjustment',delta:calibratedEstimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
       {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'},
       ...(characteristics.applied?[{
         name:'Caractéristiques du bien',
@@ -290,7 +292,7 @@ function analyze(rows,input,geo){
         weight:0,
         role:'characteristic',
         delta:characteristics.delta,
-        reason:characteristics.items.map(x=>x.label+' '+(x.pct>=0?'+':'')+x.pct.toFixed(1)+' %').join(' · ')+' · plafond ±10 %.'
+        reason:characteristics.items.map(x=>x.label+' '+(x.pct>=0?'+':'')+x.pct.toFixed(1)+' %').join(' · ')+' · total '+(characteristics.pct>=0?'+':'')+characteristics.pct.toFixed(1)+' % · plafond ±10 %. Ajustement réellement appliqué : '+(characteristics.delta>=0?'+':'')+characteristics.delta+' €.'
       }]:[])
     ],
     comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
