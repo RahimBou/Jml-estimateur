@@ -353,6 +353,11 @@ function analyze(rows,input,geo){
 }
 
 const COMPETITION_HOSTS=['leboncoin.fr','www.leboncoin.fr','seloger.com','www.seloger.com','bienici.com','www.bienici.com','logic-immo.com','www.logic-immo.com','pap.fr','www.pap.fr'];
+const NOTARY_HOSTS=[
+  'immobilier.notaires.fr','www.immobilier.notaires.fr',
+  'immonot.com','www.immonot.com',
+  'chambre-interdep-08-10-51.notaires.fr'
+];
 const AGENCY_HOSTS=[
   'jml-immobilier.fr','www.jml-immobilier.fr',
   'fischer-immobilier.fr','www.fischer-immobilier.fr',
@@ -374,6 +379,10 @@ function competitionHostAllowed(host){
 function agencyHostAllowed(host){
   const h=String(host||'').toLowerCase();
   return AGENCY_HOSTS.some(x=>h===x||h.endsWith('.'+x));
+}
+function notaryHostAllowed(host){
+  const h=String(host||'').toLowerCase();
+  return NOTARY_HOSTS.some(x=>h===x||h.endsWith('.'+x));
 }
 function parseLooseNumber(v){
   if(v==null)return 0;
@@ -452,7 +461,8 @@ async function importCompetitionListing(url){
   try{u=new URL(String(url||''));}catch{throw Error('URL d’annonce invalide.');}
   const host=u.hostname.toLowerCase();
   const knownAgency=agencyHostAllowed(host);
-  if(!['http:','https:'].includes(u.protocol)||(!competitionHostAllowed(host)&&!knownAgency)){
+  const knownNotary=notaryHostAllowed(host);
+  if(!['http:','https:'].includes(u.protocol)||(!competitionHostAllowed(host)&&!knownAgency&&!knownNotary)){
     throw Error('URL d’annonce non autorisée.');
   }
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
@@ -666,6 +676,10 @@ async function searchCompetitionListings(input){
     queries.push(['"'+town+'"','agence immobilière',typeLabel,'vente','-leboncoin','-seloger','-bienici','-logic-immo','-pap'].join(' '));
     queries.push(['"'+town+'"','agence immobilière','annonces',typeLabel,'-leboncoin','-seloger','-bienici','-logic-immo','-pap'].join(' '));
   }
+  // Notaires : source officielle des annonces notariales du 08.
+  queries.push(['site:immobilier.notaires.fr','Ardennes','vente',typeLabel].join(' '));
+  queries.push(['site:chambre-interdep-08-10-51.notaires.fr','Ardennes','vente',typeLabel].join(' '));
+  queries.push(['site:immonot.com','Ardennes','vente',typeLabel,'notaire'].join(' '));
 
   const searchBatches=await Promise.all(queries.map(q=>searchWebLinks(q).catch(()=>[])));
   const found=[];
@@ -675,12 +689,14 @@ async function searchCompetitionListings(input){
       try{parsedUrl=new URL(l.url);}catch{continue}
       const host=parsedUrl.hostname.toLowerCase();
       const knownAgency=agencyHostAllowed(host);
+      const knownNotary=notaryHostAllowed(host);
       const context=norm(String(l.title||'')+' '+String(l.snippet||''));
       const looksLikeAgency=/(agence immobili|immobilier|transaction|vente immobili|cabinet immobilier|mandataire)/.test(context);
+      const looksLikeNotary=/(notaire|office notarial|immobilier\.notaires)/.test(context);
       const allowedPortal=competitionHostAllowed(host);
-      if(!knownAgency && !allowedPortal && !looksLikeAgency)continue;
-      // Écarter les annuaires et intermédiaires : on veut la vitrine de l'agence.
-      if(!knownAgency && !allowedPortal && /(pagesjaunes|seloger|meilleursagents|societe\.com|thervy|immoplanete)/.test(host))continue;
+      if(!knownAgency && !knownNotary && !allowedPortal && !looksLikeAgency && !looksLikeNotary)continue;
+      // Écarter les annuaires et intermédiaires.
+      if(!knownAgency && !knownNotary && !allowedPortal && /(pagesjaunes|seloger|meilleursagents|societe\.com|thervy|immoplanete)/.test(host))continue;
       if(found.some(x=>x.url===l.url))continue;
       found.push(l);
       if(found.length>=60)break;
@@ -693,12 +709,12 @@ async function searchCompetitionListings(input){
       const item=await importCompetitionListing(r.url);
       const host=new URL(r.url).hostname.replace(/^www\./,'');
       return {...item,title:item.title&&item.title!=='Annonce immobilière'?item.title:(r.title||item.title),
-        sourceType:agencyHostAllowed(host)?'agence':'portail',fromSearch:true};
+        sourceType:notaryHostAllowed(host)?'notaire':agencyHostAllowed(host)?'agence':'portail',fromSearch:true};
     }catch{
       const item=listingFromSearchResult(r);
       if(!item)return null;
       const host=new URL(r.url).hostname.replace(/^www\./,'');
-      return {...item,sourceType:agencyHostAllowed(host)?'agence':'portail'};
+      return {...item,sourceType:notaryHostAllowed(host)?'notaire':agencyHostAllowed(host)?'agence':'portail'};
     }
   }));
 
