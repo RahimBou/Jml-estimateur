@@ -592,7 +592,7 @@ function extractCompetitionCity(rawAddress){
     }
   }
   // Cas "08000 Charleville-Mézières".
-  const after=raw.match(/\b\d{5}\s+([^,\-]+)/);
+  const after=raw.match(/\b\d{5}\s+([^,]+)/);
   if(after)return after[1].trim();
   // Dernier recours : ne jamais utiliser le nom de rue complet comme ville.
   const parts=raw.split(/\s+-\s+/);
