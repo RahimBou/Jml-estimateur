@@ -462,7 +462,8 @@ async function importCompetitionListing(url){
   const host=u.hostname.toLowerCase();
   const knownAgency=agencyHostAllowed(host);
   const knownNotary=notaryHostAllowed(host);
-  if(!['http:','https:'].includes(u.protocol)||(!competitionHostAllowed(host)&&!knownAgency&&!knownNotary)){
+  const isSearchDiscoveredAgency=knownAgency||knownNotary;
+  if(!['http:','https:'].includes(u.protocol)||(!competitionHostAllowed(host)&&!isSearchDiscoveredAgency)){
     throw Error('URL d’annonce non autorisée.');
   }
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
@@ -569,7 +570,10 @@ function listingFromSearchResult(r){
 async function searchWebLinks(query){
   try{
     const bing=await searchBingLinks(query);
-    const usable=bing.filter(x=>{try{return competitionHostAllowed(new URL(x.url).hostname)}catch{return false}});
+    const usable=bing.filter(x=>{try{
+      const u=new URL(x.url);
+      return ['http:','https:'].includes(u.protocol);
+    }catch{return false}});
     if(usable.length)return usable;
   }catch{}
   const u='https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)+'&kp=-2';
@@ -670,6 +674,7 @@ async function searchCompetitionListings(input){
   for(const domain of agencies){
     queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
     queries.push(['site:'+domain,'"'+city+'"',typeLabel].join(' '));
+    if(domain.includes('toutabitat.com')) queries.push(['site:'+domain,'"'+city+'"','biens','vente'].join(' '));
   }
   // Découverte départementale : recherche des sites d'agences dans chaque bassin.
   for(const town of towns){
