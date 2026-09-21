@@ -175,10 +175,10 @@ function buildCandidates(rows,subject,trend){
     const age=ageMonths(tx.date);
     if(age==null||age>MAX_AGE_MONTHS)continue;
     const distance=haversine(subject.latitude,subject.longitude,tx.lat,tx.lon);
-    if(distance==null||distance>2.0)continue;
+    if(distance==null||distance>2.5)continue;
     if(subject.area>0&&tx.area>0){
       const ratio=tx.area/subject.area;
-      if(ratio<0.60||ratio>1.70)continue;
+      if(ratio<0.50||ratio>1.80)continue;
     }
     const a=subject.area>0&&tx.area>0?ratioSimilarity(tx.area,subject.area):0.65;
     const r=subject.rooms>0&&tx.rooms>0?numericSimilarity(tx.rooms,subject.rooms,1.4):0.65;
@@ -197,7 +197,7 @@ function buildCandidates(rows,subject,trend){
 }
 
 function chooseCandidates(all,subject){
-  const radii=[0.15,0.30,0.50,0.80,1.20,2.0];
+  const radii=[0.15,0.30,0.50,0.80,1.20,1.50,2.00,2.50];
   let chosen=[];
   let radiusUsed=2;
   for(const r of radii){
@@ -287,13 +287,13 @@ async function estimate(p){
   // le niveau de prix de l'adresse.
   const nearby=recent.filter(x=>{
     const d=haversine(subject.latitude,subject.longitude,x.lat,x.lon);
-    return d!=null && d<=2.0;
+    return d!=null && d<=2.5;
   });
   const trendBase=nearby.length>=8?nearby:recent;
   const trend=robustTrend(trendBase,now);
   const elasticity=cfg.ppsm?estimateSizeElasticity(trendBase):0;
   const rawCandidates=buildCandidates(recent,subject,trend);
-  if(rawCandidates.length<3)throw new Error('Pas assez de ventes réellement comparables autour de cette adresse.');
+  if(rawCandidates.length<3){ throw new Error('Pas assez de ventes DVF exploitables dans les 24 mois et 2,5 km pour ce type de bien.'); }
   const selection=chooseCandidates(rawCandidates,subject);
   const normalized=cfg.ppsm?normalizeCandidates(selection.items,subject,elasticity,trend):selection.items.map(x=>({...x,normalizedPpsm:x.price,timeFactor:1,sizeFactor:1}));
   const filtered=cfg.ppsm?iqr(normalized):{items:normalized,mode:'prix direct'};
