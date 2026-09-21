@@ -439,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clear(body); clear(summary);
     if(!competition.length){
       const tr=document.createElement('tr'),td=document.createElement('td');
-      td.colSpan=8;td.textContent='Aucun bien similaire trouvé automatiquement pour le moment.';
+      td.colSpan=8;td.textContent='Aucun bien similaire trouvé automatiquement dans la commune et les quartiers accessibles pour le moment.';
       tr.appendChild(td);body.appendChild(tr);
       return;
     }
@@ -572,8 +572,10 @@ form.addEventListener('submit', async event => {
 
       render(data);
       lastAnalysisPayload = payload;
+      if(data.location?.city) lastAnalysisPayload.city = data.location.city;
+      if(data.location?.postal) lastAnalysisPayload.postal = data.location.postal;
       updateMarketplaceLink(payload);
-      searchCompetition(payload);
+      searchCompetition(lastAnalysisPayload);
     } catch (err) {
       console.error('JML Estimateur analyse:', err);
       showError(err && err.message ? err.message : 'Erreur inconnue.');
