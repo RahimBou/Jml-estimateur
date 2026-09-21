@@ -723,7 +723,7 @@ async function fetchPublicPage(url){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7000);
   try{
     const r=await fetch(url,{signal:controller.signal,headers:{
-      'user-agent':'Mozilla/5.0 (compatible; JML-Estimateur/1.9.8; +https://jml-immobilier.fr)',
+      'user-agent':'Mozilla/5.0 (compatible; JML-Estimateur/1.9.9; +https://jml-immobilier.fr)',
       'accept':'text/html,application/xhtml+xml','accept-language':'fr-FR,fr;q=0.9'
     }});
     if(!r.ok)throw Error('Catalogue HTTP '+r.status);
@@ -763,8 +763,18 @@ function listingFromCatalogueText(item,source){
     .map(m=>parseLooseNumber(m[1])).filter(x=>x>=10000&&x<=10000000);
   // Certains catalogues écrivent 115 m² sous la forme "115 m 2" ou utilisent
   // une balise <sup>2</sup>. Le texte nettoyé doit donc accepter les deux.
-  const areas=[...text.matchAll(/([0-9]{2,4}(?:[.,]\d+)?)\s*m(?:\s*²|\s*2)(?!\d)/gi)]
+  const areaMatches=[...text.matchAll(/([0-9]{2,4}(?:[.,]\d+)?)\s*m(?:\s*²|\s*2)(?!\d)/gi)];
+  // Sépare strictement la surface habitable de la surface de terrain :
+  // "terrain/parcelle 400 m²" ne doit jamais devenir 400 m² habitables.
+  const livingAreas=areaMatches
+    .filter(m=>{
+      const before=text.slice(Math.max(0,m.index-55),m.index);
+      const terrainPos=Math.max(before.toLowerCase().lastIndexOf('terrain'),before.toLowerCase().lastIndexOf('parcelle'));
+      const surfacePos=Math.max(before.toLowerCase().lastIndexOf('surface'),before.toLowerCase().lastIndexOf('habitable'));
+      return terrainPos<0 || surfacePos>terrainPos;
+    })
     .map(m=>parseLooseNumber(m[1])).filter(x=>x>=15&&x<=10000);
+  const areas=livingAreas;
   const rooms=[...text.matchAll(/(?:\b(?:T|F)\s*)?([1-9][0-9]?)\s*(?:pièces?|p\.|chambres?)/gi)]
     .map(m=>Number(m[1])).filter(x=>x>0&&x<30);
   const land=[...text.matchAll(/(?:terrain|parcelle)[^0-9]{0,40}([0-9]{2,6}(?:[.,]\d+)?)\s*m\s*(?:²|2)\b/gi)]
@@ -935,7 +945,7 @@ async function searchCompetitionListings(input){
 
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))}
-function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(new URL(req.url,'http://localhost').pathname==='/'||new URL(req.url,'http://localhost').pathname==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();const result=analyze(rows,input,geo);if(!result.manual)result.location={city:geo.city||'',postal:geo.postal||'',label:geo.label||''};send(res,200,result)}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1.9.8 sur http://localhost:${port}`))}
+function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(new URL(req.url,'http://localhost').pathname==='/'||new URL(req.url,'http://localhost').pathname==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();const result=analyze(rows,input,geo);if(!result.manual)result.location={city:geo.city||'',postal:geo.postal||'',label:geo.label||''};send(res,200,result)}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1.9.9 sur http://localhost:${port}`))}
 function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
