@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.4 — DVF réelles · surface hiérarchisée · DPE & caractéristiques · calibration transparente · écart fixe ±7 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.6 — DVF réelles · surface hiérarchisée · centre local robuste · DPE & caractéristiques · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -260,6 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hint.textContent = 'Cœur de comparabilité · utilisé comme socle si suffisamment fourni';
       } else if (s.role === 'characteristic') {
         hint.textContent = 'Ajustement caractéristiques · séparé du socle DVF · plafond ±10 %';
+      } else if (s.role === 'market') {
+        hint.textContent = 'Centre local · intégré au calcul';
       } else if (s.role === 'control') {
         hint.textContent = 'Contrôle uniquement · 0 % dans le calcul';
       } else {
