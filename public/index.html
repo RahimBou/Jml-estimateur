@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const button=$('competitionSearch'),error=$('competitionError');
     if(!button)return;
     button.disabled=true;
-    if(error){error.textContent='🔎 Recherche des annonces actuellement en vente…';error.className='hint';}
+    if(error){error.textContent='🔎 Recherche des annonces actuellement en vente et lecture des pages publiques…';error.className='hint';}
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),30000);
     try{
