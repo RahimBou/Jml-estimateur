@@ -85,6 +85,10 @@ function canonicalType(raw){
 }
 function normalizeNature(raw){ return String(raw||'').trim(); }
 function isStandardSale(nature){ return nature==='Vente'; }
+// Pondération de la nature de mutation utilisée par le score des comparables.
+// Le moteur charge actuellement uniquement les mutations « Vente » ; la valeur
+// neutre 1 évite toute dépendance à une fonction absente et conserve les 5 points.
+function saleClassFactor(nature){ return isStandardSale(nature) ? 1 : 0.6; }
 
 async function loadYear(year){
   if(CACHE.has(year)) return CACHE.get(year);
@@ -233,27 +237,6 @@ function localStats(items){
   const med=median(values), q1=percentile(values,.25),q3=percentile(values,.75);
   return {median:med,q1,q3,count:values.length,dispersion:med&&q1!=null&&q3!=null?(q3-q1)/med:null};
 }
-function iqrFilter(items){
-  const values=items.map(x=>x.sqm).filter(Number.isFinite);
-  if(values.length<5) return {items,mode:'insufficient-sample'};
-  const q1=percentile(values,.25),q3=percentile(values,.75),iqr=q3-q1;
-  if(!Number.isFinite(iqr)||iqr<=0) return {items,mode:'no-dispersion'};
-  const lo=q1-1.5*iqr,hi=q3+1.5*iqr;
-  const kept=items.filter(x=>x.sqm>=lo&&x.sqm<=hi);
-  return {items:kept.length>=4?kept:items,mode:kept.length>=4?'IQR':'IQR-fallback'};
-}
-function weightedMedian(items){
-  const rows=items.filter(x=>x.weight>0&&x.sqm>0).sort((a,b)=>a.sqm-b.sqm);
-  if(!rows.length)return null;
-  const total=rows.reduce((s,x)=>s+x.weight,0); let acc=0;
-  for(const x of rows){ acc+=x.weight; if(acc>=total/2)return x.sqm; }
-  return rows.at(-1).sqm;
-}
-function localStats(items){
-  const values=items.map(x=>x.sqm).filter(Number.isFinite);
-  const med=median(values), q1=percentile(values,.25),q3=percentile(values,.75);
-  return {median:med,q1,q3,count:values.length,dispersion:med&&q1!=null&&q3!=null?(q3-q1)/med:null};
-}
 function jmlAdjustments(s){
   // Ces corrections ne sont PAS des coefficients DVF officiels. Elles sont
   // affichées séparément et volontairement modestes. Elles pourront être
@@ -297,7 +280,7 @@ async function estimate(payload){
   validatePayload(payload);
   const geo=await geocode(payload.address);
   const type=payload.realtyType;
-  if(TYPE_CONFIG[type].special==='manual') return {version:'7.1.0-PRO-DVF',manual:true,message:'Ce type de bien nécessite une analyse manuelle ou une source DVF spécifique. Le moteur ne fabriquera pas une valeur à partir de comparables d’un autre type.',geo,subject:payload};
+  if(TYPE_CONFIG[type].special==='manual') return {version:'7.1.1-PRO-DVF',manual:true,message:'Ce type de bien nécessite une analyse manuelle ou une source DVF spécifique. Le moteur ne fabriquera pas une valeur à partir de comparables d’un autre type.',geo,subject:payload};
   const area=num(payload.livingArea), land=num(payload.landArea), rooms=num(payload.rooms);
   const all=[]; const loaded=[]; const errors=[];
   for(const year of DVF_YEARS){ try{ all.push(...await loadYear(year)); loaded.push(year); }catch(e){ errors.push(`${year}: ${e.message}`); } }
@@ -330,7 +313,7 @@ async function estimate(payload){
     formatSignal('Médiane locale DVF',round100(marketControl),Math.max(5,Math.round(30-conf.score*0.08)),'Contrôle de cohérence statistique ; non additionné comme une seconde source indépendante')
   ];
   return {
-    version:'7.1.0-PRO-DVF', manual:false, estimate:main, low, high, spread,
+    version:'7.1.1-PRO-DVF', manual:false, estimate:main, low, high, spread,
     confidence:conf.score, confidenceLevel:conf.level,
     method:'DVF géolocalisées → nettoyage → comparables directs/élargis → score /100 → filtre IQR → médiane pondérée → corrections JML indicatives séparées.',
     data:{department:DVF_DEPT,years:loaded,millime:DATA_MILLIME,source:'DVF+ open-data / DGFiP'},
@@ -345,10 +328,10 @@ async function estimate(payload){
   };
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,version:'7.1.0-PRO-DVF',department:DVF_DEPT,years:DVF_YEARS,millime:DATA_MILLIME,immoDataCalls:0}));
+app.get('/api/health',(req,res)=>res.json({ok:true,version:'7.1.1-PRO-DVF',department:DVF_DEPT,years:DVF_YEARS,millime:DATA_MILLIME,immoDataCalls:0}));
 app.post('/api/analyze',async(req,res)=>{
   try{ const result=await estimate(req.body||{}); res.json(result); }
-  catch(e){ res.status(400).json({error:e.message||'Erreur inconnue',version:'7.1.0-PRO-DVF'}); }
+  catch(e){ res.status(400).json({error:e.message||'Erreur inconnue',version:'7.1.1-PRO-DVF'}); }
 });
 
 if(require.main===module){ app.listen(PORT,()=>console.log(`JML Estimateur V7.1 PRO DVF — http://localhost:${PORT}`)); }
