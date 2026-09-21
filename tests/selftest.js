@@ -14,7 +14,7 @@ assert.strictEqual(direct.high,direct.estimate+20000);
 assert.strictEqual(direct.low,direct.estimate-20000);
 assert(direct.comparables.data.length>=4);
 assert(direct.confidence>=0&&direct.confidence<=100);
-assert(direct.method.includes('prix propriétaire'));
+assert(direct.method.includes('DVF'));
 assert(direct.calibration && Number.isFinite(direct.calibration.factor));
 assert(direct.statistics.baseEstimate>0);
 assert(direct.estimate>0);
