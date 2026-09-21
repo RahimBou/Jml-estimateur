@@ -468,17 +468,17 @@ function extractSearchResultLinks(html){
 }
 function extractBingSearchResults(html){
   const out=[];
-  const re=/<li[^>]+class=["'][^"']*b_algo[^"']*["'][^>]*>([\\s\\S]*?)<\\/li>/gi;
+  const re=/<li[^>]+class=["'][^"']*b_algo[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi;
   let m;
   while((m=re.exec(html))){
     const block=m[1];
-    const a=block.match(/<h2[^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    const a=block.match(/<h2[^>]*>\\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if(!a)continue;
     const href=decodeHtml(a[1]);
     const title=stripHtml(a[2]);
-    const p=block.match(/<p[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const p=block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
     const snippet=stripHtml(p?p[1]:'');
-    if(/^https?:\\/\\//i.test(href))out.push({url:href,title,snippet});
+    if(/^https?:\/\//i.test(href))out.push({url:href,title,snippet});
   }
   return out;
 }
