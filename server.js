@@ -293,7 +293,6 @@ function analyze(rows,input,geo){
         reason:characteristics.items.map(x=>x.label+' '+(x.pct>=0?'+':'')+x.pct.toFixed(1)+' %').join(' · ')+' · plafond ±10 %.'
       }]:[])
     ],
-    characteristics:characteristicReport(input,cfg),
     comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
     data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}
   };
