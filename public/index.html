@@ -117,30 +117,19 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 
 
 <div class="card" id="competitionCard">
-<h2>🏷️ Concurrence actuelle</h2>
-<p class="hint">Les prix affichés par les annonces servent uniquement à comparer le marché actuellement proposé. <b>Ils ne modifient jamais l’estimation DVF.</b></p>
-<div class="competition-tools">
-<input id="competitionUrl" type="url" placeholder="Collez l’URL d’une annonce SeLoger, Leboncoin, Bien’ici, Logic-Immo ou PAP">
-<button id="competitionImport" type="button">IMPORTER L’ANNONCE</button>
-</div>
-<p id="competitionError" class="error"></p>
-<div class="competition-tools" style="margin-top:12px">
-  <input id="manualCompetitionPrice" type="number" min="0" placeholder="Prix affiché (€)">
-  <input id="manualCompetitionArea" type="number" min="1" placeholder="Surface (m²)">
-  <input id="manualCompetitionRooms" type="number" min="0" placeholder="Pièces">
-  <input id="manualCompetitionLocality" type="text" placeholder="Quartier / secteur">
-  <button id="manualCompetitionAdd" type="button">AJOUTER MANUELLEMENT</button>
-</div>
-
-<div id="competitionSummary" class="competition-summary"></div>
-<div class="tablewrap">
-<table class="competition-table"><thead><tr><th>Source</th><th>Prix</th><th>Surface</th><th>€/m²</th><th>Pièces</th><th>Secteur</th></tr></thead><tbody id="competitionBody"></tbody></table>
-</div>
+<h2>🏷️ Biens actuellement en vente — comparables</h2>
+<p class="hint">Recherche automatique des annonces actuellement publiées qui ressemblent au bien analysé. Elles servent à lire la concurrence du marché et <b>ne modifient jamais l'estimation DVF.</b></p>
 <div class="competition-actions">
-<button id="competitionClear" type="button">EFFACER LA CONCURRENCE</button>
+<button id="competitionSearch" type="button">🔎 RECHERCHER LES BIENS SIMILAIRES</button>
+<button id="competitionClear" type="button">EFFACER</button>
 <button id="printReport" type="button" class="print-btn">📄 IMPRIMER / ENREGISTRER EN PDF</button>
 </div>
-<p class="competition-note">Import automatique : le prix et la surface sont lus depuis la page publique de l’annonce lorsque le site l’autorise. Si l’import échoue, on pourra ajouter une saisie manuelle dans l’étape suivante.</p>
+<p id="competitionError" class="hint">La recherche se lance automatiquement après l'estimation.</p>
+<div id="competitionSummary" class="competition-summary"></div>
+<div class="tablewrap">
+<table class="competition-table"><thead><tr><th>Similarité</th><th>Source</th><th>Prix</th><th>Surface</th><th>€/m²</th><th>Pièces</th><th>Secteur</th><th>Lien</th></tr></thead><tbody id="competitionBody"></tbody></table>
+</div>
+<p class="competition-note">Critères de rapprochement : même type de bien, surface proche, nombre de pièces proche et même commune/secteur lorsque l'information est disponible. Les annonces sont des prix affichés, pas des ventes réalisées.</p>
 </div>
 
 <div class="card">
@@ -407,15 +396,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   
-  const competition = [];
+  let competition = [];
+  let lastAnalysisPayload = null;
+
   function renderCompetition(){
     const body=$('competitionBody'), summary=$('competitionSummary'), error=$('competitionError');
     if(!body||!summary)return;
     clear(body); clear(summary);
-    if(error){error.textContent='';error.className='error';}
     if(!competition.length){
       const tr=document.createElement('tr'),td=document.createElement('td');
-      td.colSpan=6;td.textContent='Aucune annonce concurrente importée pour le moment.';tr.appendChild(td);body.appendChild(tr);
+      td.colSpan=8;td.textContent='Aucun bien similaire trouvé automatiquement pour le moment.';
+      tr.appendChild(td);body.appendChild(tr);
       return;
     }
     const prices=competition.map(x=>Number(x.price)).filter(x=>x>0);
@@ -423,9 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const med=sqm.length?(sqm.length%2?sqm[(sqm.length-1)/2]:(sqm[sqm.length/2-1]+sqm[sqm.length/2])/2):0;
     const min=Math.min(...prices),max=Math.max(...prices);
     [
-      ['Annonces importées',competition.length,'biens retenus'],
-      ['Prix affichés',euro(min)+' → '+euro(max),'fourchette observée'],
-      ['Médiane €/m²',Math.round(med)+' €/m²','annonces importées']
+      ['Biens similaires',competition.length,'annonces actuelles retenues'],
+      ['Prix affichés',euro(min)+' → '+euro(max),'fourchette de concurrence'],
+      ['Médiane €/m²',Math.round(med)+' €/m²','annonces retenues']
     ].forEach(a=>{
       const d=document.createElement('div');d.className='competition-kpi';
       const b=document.createElement('b');b.textContent=a[1];
@@ -434,48 +425,50 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     competition.forEach(x=>{
       const tr=document.createElement('tr');
-      [x.source,euro(x.price),Math.round(x.area)+' m²',Math.round(x.sqmPrice)+' €/m²',x.rooms?String(x.rooms):'—',x.locality||'—'].forEach(v=>appendCell(tr,v));
+      appendCell(tr,(x.similarity||0)+' %');
+      appendCell(tr,x.source||'—');
+      appendCell(tr,euro(x.price));
+      appendCell(tr,Math.round(x.area)+' m²');
+      appendCell(tr,Math.round(x.sqmPrice)+' €/m²');
+      appendCell(tr,x.rooms?String(x.rooms):'—');
+      appendCell(tr,x.locality||'—');
+      const td=document.createElement('td');
+      if(x.url){
+        const a=document.createElement('a');
+        a.href=x.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Voir';
+        td.appendChild(a);
+      }else td.textContent='—';
+      tr.appendChild(td);
       body.appendChild(tr);
     });
   }
-  async function importCompetition(){
-    const input=$('competitionUrl'),button=$('competitionImport'),error=$('competitionError');
-    const url=input?.value.trim();
-    if(!url)return;
+
+  async function searchCompetition(payload){
+    const button=$('competitionSearch'),error=$('competitionError');
+    if(!button)return;
     button.disabled=true;
-    if(error){error.textContent='Import de l’annonce en cours…';error.className='hint';}
+    if(error){error.textContent='🔎 Recherche des annonces actuelles similaires en cours…';error.className='hint';}
     try{
-      const r=await fetch('/api/competition/import',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({url})});
+      const r=await fetch('/api/competition/search',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(payload)});
       const d=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(d.error||'Impossible d’importer cette annonce.');
-      competition.push(d);
-      input.value='';
+      if(!r.ok)throw new Error(d.error||'La recherche des annonces actuelles a échoué.');
+      competition=Array.isArray(d.listings)?d.listings:[];
       renderCompetition();
+      if(error){
+        error.textContent=competition.length
+          ? '✅ '+competition.length+' bien(s) actuellement en vente retenu(s) après filtrage de similarité.'
+          : 'Aucune annonce suffisamment similaire trouvée dans les sources accessibles.';
+        error.className='hint';
+      }
     }catch(e){
-      if(error){error.textContent=e.message||'Import impossible.';error.className='error';}
+      competition=[];
+      renderCompetition();
+      if(error){error.textContent=e.message||'Recherche impossible.';error.className='error';}
     }finally{button.disabled=false;}
   }
 
-  $('manualCompetitionAdd')?.addEventListener('click',()=>{
-    const price=Number($('manualCompetitionPrice')?.value||0);
-    const area=Number($('manualCompetitionArea')?.value||0);
-    const rooms=Number($('manualCompetitionRooms')?.value||0);
-    const locality=String($('manualCompetitionLocality')?.value||'').trim();
-    const error=$('competitionError');
-    if(price<10000||area<15){
-      if(error){error.textContent='Pour une saisie manuelle, indiquez au minimum un prix ≥ 10 000 € et une surface ≥ 15 m².';error.className='error';}
-      return;
-    }
-    competition.push({source:'Saisie manuelle',url:'',title:'Annonce concurrente',price,area,rooms,locality,sqmPrice:Math.round(price/area),importedAt:new Date().toISOString()});
-    $('manualCompetitionPrice').value='';
-    $('manualCompetitionArea').value='';
-    $('manualCompetitionRooms').value='';
-    $('manualCompetitionLocality').value='';
-    renderCompetition();
-  });
-  $('competitionImport')?.addEventListener('click',importCompetition);
-  $('competitionUrl')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();importCompetition();}});
-  $('competitionClear')?.addEventListener('click',()=>{competition.length=0;renderCompetition();});
+  $('competitionSearch')?.addEventListener('click',()=>{if(lastAnalysisPayload)searchCompetition(lastAnalysisPayload);});
+  $('competitionClear')?.addEventListener('click',()=>{competition=[];renderCompetition();});
   $('printReport')?.addEventListener('click',()=>window.print());
   renderCompetition();
 
@@ -525,6 +518,8 @@ form.addEventListener('submit', async event => {
       if (!response.ok) throw new Error(data.error || 'Erreur pendant l’analyse.');
 
       render(data);
+      lastAnalysisPayload = payload;
+      searchCompetition(payload);
     } catch (err) {
       console.error('JML Estimateur analyse:', err);
       showError(err && err.message ? err.message : 'Erreur inconnue.');
