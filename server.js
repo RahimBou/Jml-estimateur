@@ -353,9 +353,27 @@ function analyze(rows,input,geo){
 }
 
 const COMPETITION_HOSTS=['leboncoin.fr','www.leboncoin.fr','seloger.com','www.seloger.com','bienici.com','www.bienici.com','logic-immo.com','www.logic-immo.com','pap.fr','www.pap.fr'];
+const AGENCY_HOSTS=[
+  'jml-immobilier.fr','www.jml-immobilier.fr',
+  'fischer-immobilier.fr','www.fischer-immobilier.fr',
+  'agence-ing.fr','www.agence-ing.fr',
+  'sassi-immobilier.fr','www.sassi-immobilier.fr',
+  'justimmo08.fr','www.justimmo08.fr',
+  'ill-immobilier.fr','www.ill-immobilier.fr',
+  'rimbaudimmo.fr','www.rimbaudimmo.fr',
+  'charlevillemezieres.stephaneplazaimmobilier.com',
+  'charleville-mezieres.guy-hoquet.com',
+  'guy-hoquet.com','www.guy-hoquet.com',
+  'citya.com','www.citya.com',
+  'charleville-arthurimmo.com','www.charleville-arthurimmo.com'
+];
 function competitionHostAllowed(host){
   const h=String(host||'').toLowerCase();
-  return COMPETITION_HOSTS.some(x=>h===x||h.endsWith('.'+x));
+  return [...COMPETITION_HOSTS,...AGENCY_HOSTS].some(x=>h===x||h.endsWith('.'+x));
+}
+function agencyHostAllowed(host){
+  const h=String(host||'').toLowerCase();
+  return AGENCY_HOSTS.some(x=>h===x||h.endsWith('.'+x));
 }
 function parseLooseNumber(v){
   if(v==null)return 0;
@@ -611,13 +629,31 @@ async function searchCompetitionListings(input){
   }[input.realtyType]||'immobilier';
 
   const portals=['seloger.com','leboncoin.fr','bienici.com','logic-immo.com','pap.fr'];
+  const agencies=[
+    'jml-immobilier.fr',
+    'fischer-immobilier.fr',
+    'agence-ing.fr',
+    'sassi-immobilier.fr',
+    'justimmo08.fr',
+    'ill-immobilier.fr',
+    'rimbaudimmo.fr',
+    'charlevillemezieres.stephaneplazaimmobilier.com',
+    'charleville-mezieres.guy-hoquet.com',
+    'guy-hoquet.com',
+    'citya.com',
+    'charleville-arthurimmo.com'
+  ];
+
   const queries=[];
+  // Portails : conservés comme source complémentaire.
   for(const domain of portals){
     queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
     queries.push(['site:'+domain,'"'+city+'"',typeLabel].join(' '));
-    if(input.realtyType==='house'||input.realtyType==='apartment'){
-      queries.push(['site:'+domain,'"'+city+'"',typeLabel,'immobilier'].join(' '));
-    }
+  }
+  // Agences : recherche directe dans leurs propres vitrines.
+  for(const domain of agencies){
+    queries.push(['site:'+domain,'"'+city+'"',typeLabel,'vente'].join(' '));
+    queries.push(['site:'+domain,'"'+city+'"',typeLabel].join(' '));
   }
 
   const searchBatches=await Promise.all(queries.map(q=>searchWebLinks(q).catch(()=>[])));
@@ -627,21 +663,22 @@ async function searchCompetitionListings(input){
       try{if(!competitionHostAllowed(new URL(l.url).hostname))continue}catch{continue}
       if(found.some(x=>x.url===l.url))continue;
       found.push(l);
-      if(found.length>=36)break;
+      if(found.length>=60)break;
     }
-    if(found.length>=36)break;
+    if(found.length>=60)break;
   }
 
-  // V1.8.7 : les moteurs de recherche servent uniquement à découvrir les URLs.
-  // Ensuite on lit directement les pages publiques des annonces pour récupérer
-  // prix/surface/pièces via JSON-LD ou le contenu HTML. Cela évite de dépendre
-  // du fait que Bing/DDG affiche ou non ces informations dans son extrait.
-  const direct=await Promise.allSettled(found.slice(0,30).map(async r=>{
+  const direct=await Promise.allSettled(found.slice(0,50).map(async r=>{
     try{
       const item=await importCompetitionListing(r.url);
-      return {...item,title:item.title&&item.title!=='Annonce immobilière'?item.title:(r.title||item.title),fromSearch:true};
+      const host=new URL(r.url).hostname.replace(/^www\./,'');
+      return {...item,title:item.title&&item.title!=='Annonce immobilière'?item.title:(r.title||item.title),
+        sourceType:agencyHostAllowed(host)?'agence':'portail',fromSearch:true};
     }catch{
-      return listingFromSearchResult(r);
+      const item=listingFromSearchResult(r);
+      if(!item)return null;
+      const host=new URL(r.url).hostname.replace(/^www\./,'');
+      return {...item,sourceType:agencyHostAllowed(host)?'agence':'portail'};
     }
   }));
 
@@ -662,7 +699,7 @@ async function searchCompetitionListings(input){
     const key=x.url||[x.source,x.price,x.area,x.rooms,norm(x.title)].join('|');
     if(!unique.has(key))unique.set(key,x);
   }
-  return [...unique.values()].slice(0,20);
+  return [...unique.values()].slice(0,25);
 }
 
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
