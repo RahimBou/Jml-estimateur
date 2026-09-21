@@ -767,7 +767,12 @@ function listingFromCatalogueText(item,source){
   // Sépare strictement la surface habitable de la surface de terrain :
   // "terrain/parcelle 400 m²" ne doit jamais devenir 400 m² habitables.
   const livingAreas=areaMatches
-    .filter(m=>!/(?:terrain|parcelle)\\s*(?:de|:)?\\s*(?:[0-9]{1,6}(?:[.,]\\d+)?)?\\s*m?\\s*$/i.test(text.slice(Math.max(0,m.index-45),m.index)))
+    .filter(m=>{
+      const before=text.slice(Math.max(0,m.index-55),m.index);
+      const terrainPos=Math.max(before.toLowerCase().lastIndexOf('terrain'),before.toLowerCase().lastIndexOf('parcelle'));
+      const surfacePos=Math.max(before.toLowerCase().lastIndexOf('surface'),before.toLowerCase().lastIndexOf('habitable'));
+      return terrainPos<0 || surfacePos>terrainPos;
+    })
     .map(m=>parseLooseNumber(m[1])).filter(x=>x>=15&&x<=10000);
   const areas=livingAreas;
   const rooms=[...text.matchAll(/(?:\b(?:T|F)\s*)?([1-9][0-9]?)\s*(?:pièces?|p\.|chambres?)/gi)]
