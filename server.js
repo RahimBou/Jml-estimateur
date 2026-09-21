@@ -490,7 +490,8 @@ function similarityForCompetition(x,input){
   return {...x,similarity:score,type};
 }
 async function searchCompetitionListings(input){
-  const city=String(input.city||input.address||'').replace(/,.*$/,'').trim();
+  const rawAddress=String(input.city||input.address||'').trim();
+  const city=(rawAddress.match(/\\b\\d{5}\\s+([^,]+)/)||[])[1]?.trim() || rawAddress.replace(/^.*?,/,'').trim();
   const typeLabel={house:'maison',apartment:'appartement',commercial:'local commercial',industrial:'local industriel',garage:'garage',parking:'parking',land:'terrain'}[input.realtyType]||'immobilier';
   const area=n(input.livingArea)||n(input.landArea);
   const rooms=n(input.rooms);
