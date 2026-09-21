@@ -4,7 +4,7 @@ const gunzip=promisify(zlib.gunzip);
 const PORT=Number(process.env.PORT||3000),DEPT=process.env.DVF_DEPT||'08';
 const YEARS=(process.env.DVF_YEARS||'2025,2024,2023,2022').split(',').map(Number).filter(Boolean);
 const RADII=[.3,.75,1.5,3,5],MAX_MONTHS=24;
-const RECENCY=[[3,1],[6,.95],[12,.85],[18,.65],[24,.4]];
+const RECENCY=[[3,1],[6,.97],[12,.92],[18,.82],[24,.65]];
 const TYPES={
  house:{label:'Maison',area:'living',match:r=>norm(r.type_local)==='maison'},
  apartment:{label:'Appartement',area:'living',match:r=>norm(r.type_local)==='appartement'},
@@ -68,7 +68,12 @@ function weight(r,t){
   const sw=surfaceSimilarityWeight(r,t); if(!sw)return 0;
   const roomFactor=t.rooms&&r.rooms?Math.max(.45,1-Math.abs(t.rooms-r.rooms)*.10):.8;
   const landFactor=t.landArea&&r.landArea?Math.max(.45,Math.min(1,Math.min(t.landArea,r.landArea)/Math.max(t.landArea,r.landArea))):.85;
-  return sf*sw*rw(r.age)*Math.exp(-r.distance/.60)*roomFactor*landFactor*streetSimilarityWeight(r,t)*(0.55+r.score/220);
+  const proximity=Math.exp(-r.distance/.95);
+  const recency=rw(r.age);
+  // V1.5 : une vente très proche et très comparable conserve un poids fort
+  // même si elle est un peu plus ancienne. La distance reste secondaire
+  // par rapport à la surface, mais ne pénalise plus aussi brutalement.
+  return sf*sw*recency*proximity*roomFactor*landFactor*streetSimilarityWeight(r,t)*(0.55+r.score/220);
 }
 function selectFromBase(base,t,asOf=Date.now()){
   const usable=base.map(r=>({...r,distance:dist(t.lat,t.lon,r.lat,r.lon),age:ageMonths(date(r.date),asOf)}))
@@ -143,7 +148,7 @@ function learnCorrection(rows,cfg,target){
   }
   if(ratios.length<8)return{factor:1,samples:ratios.length,usable:false};
   const rawMedian=median(ratios.map(x=>x.ratio));
-  const factor=Math.max(.85,Math.min(1.15,rawMedian));
+  const factor=Math.max(.90,Math.min(1.10,rawMedian));
   return{factor,samples:ratios.length,usable:true,rawMedian};
 }
 function characteristicAdjustment(input,cfg,baseEstimate){
