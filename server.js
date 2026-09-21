@@ -146,7 +146,73 @@ function learnCorrection(rows,cfg,target){
   const factor=Math.max(.85,Math.min(1.15,rawMedian));
   return{factor,samples:ratios.length,usable:true,rawMedian};
 }
-function characteristicReport(input,cfg){
+function characteristicAdjustment(input,cfg,baseEstimate){
+  // V1.4 : couche complémentaire prudente pour les caractéristiques
+  // qui ne sont pas présentes dans les fichiers DVF standards.
+  // Elle reste séparée du socle DVF et son détail est affiché à l'utilisateur.
+  // Le terrain n'est PAS corrigé une seconde fois : il est déjà intégré
+  // dans la comparabilité DVF lorsque la donnée est disponible.
+  const items=[];
+  const add=(label,pct,reason)=>{if(pct)items.push({label,pct,reason});};
+
+  const dpe={A:3,B:2,C:1,D:0,E:-2,F:-4,G:-6};
+  if(input.dpe&&dpe[input.dpe]!==undefined)
+    add('DPE '+input.dpe,dpe[input.dpe],'barème prudent, séparé du socle DVF');
+
+  const condition={
+    excellent:3.5,
+    very_good:2,
+    good:0,
+    refresh:-3,
+    major_work:-7
+  };
+  if(input.condition&&condition[input.condition]!==undefined)
+    add('État général',condition[input.condition],'barème prudent, séparé du socle DVF');
+
+  if(input.garage)add('Garage',1.5,'équipement non détaillé dans DVF');
+  if(input.parking)add('Parking',.5,'équipement non détaillé dans DVF');
+  if(input.cellar)add('Cave',.5,'équipement non détaillé dans DVF');
+  if(input.terrace)add('Terrasse',1,'équipement non détaillé dans DVF');
+  if(input.patio)add('Cour / patio',.75,'équipement non détaillé dans DVF');
+  if(input.niceView)add('Belle vue',1.5,'caractéristique non détaillée dans DVF');
+
+  if(input.bathrooms>1){
+    const extra=Math.min(2,(Number(input.bathrooms)-1)*.5);
+    add('Salle(s) de bains supplémentaire(s)',extra,'information non détaillée dans DVF');
+  }
+
+  // L'année de construction n'est utilisée que si aucun DPE n'est fourni,
+  // pour éviter de compter deux fois le même signal énergétique/âge.
+  if(!input.dpe&&input.constructionYear){
+    const y=Number(input.constructionYear);
+    let pct=0;
+    if(y>=2015)pct=1.5;
+    else if(y>=2005)pct=1;
+    else if(y<1970)pct=-1.5;
+    else if(y<1985)pct=-.75;
+    if(pct)add('Année de construction',pct,'signal de secours uniquement en absence de DPE');
+  }
+
+  // Plafond volontairement conservateur : les caractéristiques ne doivent
+  // jamais écraser le signal des ventes DVF.
+  const raw=items.reduce((sum,x)=>sum+x.pct,0);
+  const pct=Math.max(-10,Math.min(10,raw));
+  const adjusted=Math.round(baseEstimate*(1+pct/100)/1000)*1000;
+
+  return {
+    applied:items.length>0,
+    rawPct:raw,
+    pct,
+    baseEstimate,
+    adjustedEstimate:adjusted,
+    delta:adjusted-baseEstimate,
+    items,
+    capPct:10,
+    note:'Couche complémentaire prudente : les caractéristiques absentes de DVF sont appliquées séparément et plafonnées à ±10 %. Le terrain n’est pas ajouté une seconde fois car il participe déjà à la comparabilité DVF lorsqu’il est disponible.'
+  };
+}
+
+function characteristicReport(input,cfg,characteristic){
   const monetary=[];
   if(cfg===TYPES.house||cfg===TYPES.apartment||cfg===TYPES.commercial||cfg===TYPES.industrial){
     monetary.push('type de bien','surface bâtie','distance géographique','récence de la vente','nombre de pièces');
@@ -154,6 +220,7 @@ function characteristicReport(input,cfg){
   if(cfg===TYPES.house||cfg===TYPES.land||cfg===TYPES.agricultural_land||cfg===TYPES.commercial||cfg===TYPES.industrial){
     monetary.push('surface du terrain');
   }
+
   const supplied=[];
   if(input.bathrooms>0) supplied.push('salles de bains');
   if(input.constructionYear>0) supplied.push('année de construction');
@@ -165,7 +232,14 @@ function characteristicReport(input,cfg){
   if(input.terrace) supplied.push('terrasse');
   if(input.patio) supplied.push('cour / patio');
   if(input.niceView) supplied.push('belle vue');
-  return {monetary, supplied, notMonetized:['DPE','état général','année de construction','salles de bains','garage','parking','cave','terrasse','cour / patio','belle vue'], note:'Les critères non présents dans DVF ne sont pas convertis en pourcentages arbitraires. Ils sont conservés pour enrichir la fiche et pourront être monétisés uniquement avec une source de comparables qui les documente.'};
+
+  return {
+    monetary,
+    supplied,
+    notMonetized:[],
+    adjustment:characteristic,
+    note:characteristic.note
+  };
 }
 function analyze(rows,input,geo){
   const cfg=TYPES[input.realtyType];
@@ -179,7 +253,9 @@ function analyze(rows,input,geo){
   const model=estimateFromComparables(c,t,true);
   const baseEstimate=model.estimate;
   const calibration=learnCorrection(rows,cfg,{...t,asOf});
-  const estimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
+  const calibratedEstimate=calibration.usable?Math.round(baseEstimate*calibration.factor/1000)*1000:baseEstimate;
+  const characteristics=characteristicAdjustment(input,cfg,calibratedEstimate);
+  const estimate=characteristics.adjustedEstimate;
   const sqm=estimate/Math.max(1,area),local=median(c.map(r=>r.sqmPrice)),conf=confidence(c,t),avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length;
   return{
     estimate,low:Math.max(0,estimate-7000),high:estimate+7000,rangeEur:7000,confidence:conf,
@@ -187,9 +263,10 @@ function analyze(rows,input,geo){
     method:(model.method==='cœur de comparabilité par surface'
       ?'Cœur de comparabilité DVF V1.3 : priorité aux ventes de même type, même rue si identifiable, proches géographiquement et surtout à surface proche, puis calibration historique hors échantillon.'
       :'Médiane pondérée des ventes DVF comparables : le cœur de surface est insuffisant pour constituer le socle.')+
-      ' Le prix propriétaire n’entre jamais dans le calcul.',
-    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:estimate-baseEstimate,finalEstimate:estimate,metricLabel:'€/m²'},
+      ' Puis calibration historique et couche caractéristiques séparée (plafond ±10 %). Le prix propriétaire n’entre jamais dans le calcul.',
+    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:calibratedEstimate-baseEstimate,characteristicAdjustmentPct:characteristics.pct,characteristicDelta:characteristics.delta,finalEstimate:estimate,metricLabel:'€/m²'},
     calibration:{applied:calibration.usable,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test'},
+    characteristics:characteristicReport(input,cfg,characteristics),
     selection:{
       retained:c.length,
       directComparables:c.filter(r=>r.distance<=.75).length,
@@ -206,7 +283,15 @@ function analyze(rows,input,geo){
         {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
       ]:[]),
       ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,role:'adjustment',delta:estimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
-      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
+      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'},
+      ...(characteristics.applied?[{
+        name:'Caractéristiques du bien',
+        value:estimate,
+        weight:0,
+        role:'characteristic',
+        delta:characteristics.delta,
+        reason:characteristics.items.map(x=>x.label+' '+(x.pct>=0?'+':'')+x.pct.toFixed(1)+' %').join(' · ')+' · plafond ±10 %.'
+      }]:[])
     ],
     characteristics:characteristicReport(input,cfg),
     comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
@@ -220,4 +305,4 @@ function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
 if(require.main===module)startServer();
-module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,primaryComparables,weightedMean,estimateFromComparables,learnCorrection,analyze,mockRows,TYPES,geocode,loadDvf};
+module.exports={startServer,median,percentile,wmedian,rw,consolidate,select,selectFromBase,primaryComparables,weightedMean,estimateFromComparables,learnCorrection,characteristicAdjustment,analyze,mockRows,TYPES,geocode,loadDvf};
