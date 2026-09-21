@@ -95,6 +95,27 @@ function learnCorrection(rows,cfg,target){
   const factor=Math.max(.85,Math.min(1.15,rawMedian));
   return{factor,samples:ratios.length,usable:true,rawMedian};
 }
+function characteristicReport(input,cfg){
+  const monetary=[];
+  if(cfg===TYPES.house||cfg===TYPES.apartment||cfg===TYPES.commercial||cfg===TYPES.industrial){
+    monetary.push('type de bien','surface bâtie','distance géographique','récence de la vente','nombre de pièces');
+  }
+  if(cfg===TYPES.house||cfg===TYPES.land||cfg===TYPES.agricultural_land||cfg===TYPES.commercial||cfg===TYPES.industrial){
+    monetary.push('surface du terrain');
+  }
+  const supplied=[];
+  if(input.bathrooms>0) supplied.push('salles de bains');
+  if(input.constructionYear>0) supplied.push('année de construction');
+  if(input.dpe) supplied.push('DPE '+input.dpe);
+  if(input.condition) supplied.push('état général');
+  if(input.garage) supplied.push('garage');
+  if(input.parking) supplied.push('parking');
+  if(input.cellar) supplied.push('cave');
+  if(input.terrace) supplied.push('terrasse');
+  if(input.patio) supplied.push('cour / patio');
+  if(input.niceView) supplied.push('belle vue');
+  return {monetary, supplied, notMonetized:['DPE','état général','année de construction','salles de bains','garage','parking','cave','terrasse','cour / patio','belle vue'], note:'Les critères non présents dans DVF ne sont pas convertis en pourcentages arbitraires. Ils sont conservés pour enrichir la fiche et pourront être monétisés uniquement avec une source de comparables qui les documente.'};
+}
 function analyze(rows,input,geo){
   const cfg=TYPES[input.realtyType];
   if(!cfg)throw Error('Type de bien invalide.');
@@ -112,14 +133,15 @@ function analyze(rows,input,geo){
     estimate,low:Math.max(0,estimate-20000),high:estimate+20000,rangeEur:20000,confidence:conf,
     confidenceLevel:conf>=80?'Élevée':conf>=60?'Bonne':conf>=40?'Moyenne':'Faible',
     method:calibration.usable?'Médiane pondérée DVF + calibration par backtest historique hors échantillon. Le prix propriétaire n’entre jamais dans le calcul.':'Médiane pondérée des ventes DVF comparables. Calibration historique insuffisante pour être appliquée.',
-    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,metricLabel:'€/m²'},
+    statistics:{weightedMetric:sqm,baseEstimate,localMedian:local,avgDistanceKm:avgD,avgAgeMonths:avgA,trendAnnualPct:null,adjustmentPct:calibration.usable?Math.round((calibration.factor-1)*1000)/10:0,calibrationDelta:estimate-baseEstimate,finalEstimate:estimate,metricLabel:'€/m²'},
     calibration:{applied:calibration.usable,factor:calibration.factor,samples:calibration.samples,rawMedian:calibration.rawMedian??null,rule:'apprentissage uniquement sur ventes antérieures à chaque vente test'},
     selection:{retained:c.length,directComparables:c.filter(r=>r.distance<=.75).length,radiusKm:Math.max(...c.map(r=>r.distance)),filter:'24 mois · type identique · IQR 1,5'},
     sources:[
-      {name:'Ventes DVF comparables',value:baseEstimate,weight:100,reason:c.length+' ventes réelles retenues après filtrage.'},
-      ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,reason:calibration.samples+' ventes historiques testées hors échantillon.'}]:[]),
-      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
+      {name:'Base DVF — comparables réels',value:baseEstimate,weight:100,role:'base',reason:c.length+' ventes réelles retenues après filtrage.'},
+      ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,role:'adjustment',delta:estimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
+      {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
     ],
+    characteristics:characteristicReport(input,cfg),
     comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
     data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}
   };

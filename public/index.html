@@ -254,7 +254,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const hint = document.createElement('div');
       hint.className = 'hint';
-      hint.textContent = 'Poids dans le calcul : ' + (Number(s.weight)||0) + '%';
+      if (s.role === 'adjustment') {
+        hint.textContent = 'Correction appliquée au socle DVF : ' + (Number(s.delta)>=0?'+':'') + euro(s.delta || 0);
+      } else if (s.role === 'control') {
+        hint.textContent = 'Contrôle uniquement · 0 % dans le calcul';
+      } else {
+        hint.textContent = 'Socle principal · 100 % du calcul';
+      }
 
       const reason = document.createElement('div');
       reason.className = 'hint';
@@ -321,8 +327,15 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSources(Array.isArray(d.sources) ? d.sources : []);
     const adjBox=$('adjustments'); clear(adjBox);
     const p=document.createElement('p');
-    p.textContent='Aucune correction forfaitaire DPE, état, garage, terrasse ou vue n’est ajoutée au prix. Ces caractéristiques ne sont pas transformées en pourcentages arbitraires.';
+    const chars=d.characteristics || {};
+    p.textContent='Critères réellement monétisés par les ventes DVF : ' + ((chars.monetary||[]).join(', ') || '—') + '.';
     adjBox.appendChild(p);
+    const p2=document.createElement('p');
+    p2.textContent='Caractéristiques renseignées : ' + ((chars.supplied||[]).join(', ') || 'aucune') + '.';
+    adjBox.appendChild(p2);
+    const p3=document.createElement('p');
+    p3.textContent=chars.note || 'Les caractéristiques absentes des données DVF ne sont pas transformées en pourcentages arbitraires.';
+    adjBox.appendChild(p3);
     const warning=$('warning');
     if(d.warning){warning.style.display='block';warning.textContent=d.warning;}else{warning.style.display='none';warning.textContent='';}
     renderTransactions(d.comparables?.data || []);
