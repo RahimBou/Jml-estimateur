@@ -62,7 +62,8 @@ function selectFromBase(base,t,asOf=Date.now()){
   const ps=sel.map(r=>r.sqmPrice),q1=percentile(ps,.25),q3=percentile(ps,.75),iqr=q3-q1;
   const keep=iqr?sel.filter(r=>r.sqmPrice>=q1-1.5*iqr&&r.sqmPrice<=q3+1.5*iqr):sel;
   keep.forEach(r=>r.weight=weight(r,t));
-  return keep.filter(r=>r.weight>0).sort((a,b)=>b.weight-a.weight).slice(0,15);
+  const limit=t.type==='apartment'?5:t.type==='house'?15:10;
+  return keep.filter(r=>r.weight>0).sort((a,b)=>b.weight-a.weight).slice(0,limit);
 }
 function select(rows,t,cfg,asOf=Date.now()){return selectFromBase(consolidate(rows,cfg),t,asOf)}
 function confidence(c,t){if(!c.length)return 0;const avgD=c.reduce((s,r)=>s+r.distance,0)/c.length,avgA=c.reduce((s,r)=>s+r.age,0)/c.length,med=median(c.map(r=>r.sqmPrice)),mad=median(c.map(r=>Math.abs(r.sqmPrice-med))),surface=c.reduce((s,r)=>s+Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),0)/c.length;return Math.max(0,Math.min(100,Math.round(Math.min(35,c.length*5)+Math.max(0,25-avgD*7)+Math.max(0,20-avgA*.7)+Math.max(0,20-mad/Math.max(1,med)*100)+surface*10)))}
@@ -81,7 +82,7 @@ function learnCorrection(rows,cfg,target){
     const soldDate=date(sold.date); if(!soldDate)continue;
     const prior=all.filter(r=>date(r.date)?.getTime()<soldDate.getTime());
     if(prior.length<6)continue;
-    const t={lat:sold.lat,lon:sold.lon,area:sold.area,rooms:sold.rooms||0,landArea:sold.landArea||0};
+    const t={lat:sold.lat,lon:sold.lon,area:sold.area,rooms:sold.rooms||0,landArea:sold.landArea||0,type:cfg===TYPES.apartment?'apartment':cfg===TYPES.house?'house':undefined};
     const c=selectFromBase(prior,t,soldDate);
     const pred=estimateFromComparables(c,t);
     if(pred>0&&sold.price>0){
@@ -99,7 +100,7 @@ function analyze(rows,input,geo){
   if(!cfg)throw Error('Type de bien invalide.');
   if(['building','other'].includes(input.realtyType))return{manual:true,message:'Ce type n’est pas directement identifiable de façon fiable dans DVF V1. Une méthode dédiée est nécessaire pour éviter d’inventer un prix.'};
   const area=cfg.area==='land'?input.landArea:input.livingArea;
-  const t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0};
+  const t={...geo,area,rooms:input.rooms||0,landArea:input.landArea||0,type:input.realtyType};
   const asOf=Date.now();
   const c=select(rows,t,cfg,asOf);
   if(!c.length)return{manual:true,message:'Pas assez de ventes DVF exploitables pour '+cfg.label+' dans les 24 derniers mois et 5 km.'};
