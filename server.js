@@ -33,7 +33,7 @@ function commercial(v){const s=norm(v);return s.includes('commercial')||s.includ
 function consolidate(rows,cfg){const m=new Map();for(const r of rows)if(norm(r.nature)==='vente'&&cfg.match(r)&&r.id&&r.price&&r.date){const k=[r.id,r.type_local,r.streetNumber,norm(r.streetName),r.postal,r.parcel].join('|');if(!m.has(k))m.set(k,[]);m.get(k).push(r)}const out=[];for(const a of m.values()){if(a.length!==1)continue;const r=a[0],area=cfg.area==='land'?r.landArea:r.livingArea;if(area>0&&r.lat&&r.lon)out.push({...r,area,sqmPrice:r.price/area})}return out}
 async function fetchYear(y){if(process.env.MOCK_DVF_MODE==='true')return mockRows(String(y));const u=`https://files.data.gouv.fr/geo-dvf/latest/csv/${y}/departements/${DEPT}.csv.gz`,r=await fetch(u);if(!r.ok)throw Error(`DVF ${y}: HTTP ${r.status}`);return csv((await gunzip(Buffer.from(await r.arrayBuffer()))).toString('utf8')).map(row)}
 async function loadDvf(){return (await Promise.all(YEARS.map(y=>fetchYear(y).catch(()=>[])))).flat()}
-async function geocode(address){if(process.env.MOCK_DVF_MODE==='true')return{lat:49.77,lon:4.72,label:address};const u=new URL('https://data.geopf.fr/geocodage/search');u.searchParams.set('q',address);u.searchParams.set('limit','1');const r=await fetch(u);if(!r.ok)throw Error(`Géocodage: HTTP ${r.status}`);const d=await r.json(),f=d.features?.[0];if(!f?.geometry?.coordinates)throw Error('Adresse introuvable. Vérifiez l’adresse saisie.');return{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],label:f.properties?.label||address}}
+async function geocode(address){if(process.env.MOCK_DVF_MODE==='true')return{lat:49.77,lon:4.72,label:address,city:'Charleville-Mézières',postal:'08000'};const u=new URL('https://data.geopf.fr/geocodage/search');u.searchParams.set('q',address);u.searchParams.set('limit','1');const r=await fetch(u);if(!r.ok)throw Error(`Géocodage: HTTP ${r.status}`);const d=await r.json(),f=d.features?.[0];if(!f?.geometry?.coordinates)throw Error('Adresse introuvable. Vérifiez l’adresse saisie.');const p=f.properties||{};return{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],label:p.label||address,city:p.city||p.municipality||p.locality||'',postal:p.postcode||p.postalcode||''}}
 function score(r,t,rad){const type=25,d=20*Math.max(0,1-r.distance/rad),s=20*Math.max(0,1-Math.abs(r.area-t.area)/Math.max(1,t.area)),p=t.rooms&&r.rooms?10*Math.max(0,1-Math.abs(t.rooms-r.rooms)/5):5,l=t.landArea&&r.landArea?10*Math.max(0,1-Math.abs(t.landArea-r.landArea)/Math.max(1,t.landArea)):5,rec=15*rw(r.age);return type+d+s+p+l+rec}
 function surfaceFactor(r,t){
   const ratio=Math.min(r.area,t.area)/Math.max(r.area,t.area);
@@ -575,24 +575,32 @@ function similarityForCompetition(x,input){
 function extractCompetitionCity(rawAddress){
   const raw=String(rawAddress||'').replace(/\s+/g,' ').trim();
   if(!raw)return '';
-  // Adresse fréquente dans l'interface : "25 Rue ... Charleville-Mézières 08000 - Quartier".
-  // On cherche d'abord le nom de commune juste avant le code postal, pas le quartier après.
+  // Priorité aux communes transmises directement par le géocodage.
+  // Pour une adresse complète du type "25 Rue du 8 Mai Charleville-Mézières 08000 - Victor Hugo",
+  // on ne doit surtout pas capturer "Mai Charleville-Mézières".
   const postal=raw.match(/\b\d{5}\b/);
   if(postal){
     const before=raw.slice(0,postal.index).replace(/[,:\-]+\s*$/,'').trim();
-    const cityMatch=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’\-]+){0,3})$/);
-    if(cityMatch)return cityMatch[1].trim();
+    // Commune composée avec tiret : cas très fréquent en France.
+    const hyphenCity=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+(?:[\-][A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)+(?:\s+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’]+)?)$/);
+    if(hyphenCity)return hyphenCity[1].trim();
+    // Format avec virgule : "25 rue ..., 08000 Charleville-Mézières".
     const commaParts=before.split(/\s*,\s*/).filter(Boolean);
-    if(commaParts.length)return commaParts.at(-1).trim();
+    if(commaParts.length){
+      const tail=commaParts.at(-1).trim();
+      if(!/^\d+$/.test(tail))return tail.replace(/^\d{5}\s*/,'').trim();
+    }
   }
   // Cas "08000 Charleville-Mézières".
   const after=raw.match(/\b\d{5}\s+([^,\-]+)/);
   if(after)return after[1].trim();
-  return raw.replace(/^.*?,/,'').replace(/\s+-\s+.*$/,'').trim();
+  // Dernier recours : ne jamais utiliser le nom de rue complet comme ville.
+  const parts=raw.split(/\s+-\s+/);
+  return (parts[0]||raw).split(',').at(-1).trim();
 }
 
 async function searchCompetitionListings(input){
-  const city=extractCompetitionCity(input.city||input.address);
+  const city=String(input.city||extractCompetitionCity(input.address)||'').trim();
   input.city=city;
   const typeLabel={house:'maison',apartment:'appartement',commercial:'local commercial',industrial:'local industriel',garage:'garage',parking:'parking',land:'terrain'}[input.realtyType]||'immobilier';
   const area=n(input.livingArea)||n(input.landArea);
@@ -637,7 +645,7 @@ async function searchCompetitionListings(input){
 
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))}
-function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();send(res,200,analyze(rows,input,geo))}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1 sur http://localhost:${port}`))}
+function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();const result=analyze(rows,input,geo);if(!result.manual)result.location={city:geo.city||'',postal:geo.postal||'',label:geo.label||''};send(res,200,result)}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1 sur http://localhost:${port}`))}
 function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
