@@ -815,8 +815,8 @@ async function searchCompetitionListings(input){
     land:'terrain'
   }[input.realtyType]||'immobilier';
 
-  let direct=[];
-  try{direct=await searchDirectAgencyCatalogues(input,city,typeLabel)}catch{}
+  let directCatalogues=[];
+  try{directCatalogues=await searchDirectAgencyCatalogues(input,city,typeLabel)}catch{}
 
   const portals=['seloger.com','leboncoin.fr','bienici.com','logic-immo.com','pap.fr'];
   // Base locale connue + découverte dynamique : on ne limite pas la couverture à
@@ -919,7 +919,7 @@ async function searchCompetitionListings(input){
     const key=x.url||[x.source,x.price,x.area,x.rooms,norm(x.title)].join('|');
     if(!unique.has(key))unique.set(key,x);
   }
-  const merged=[...direct,...unique.values()];
+  const merged=[...directCatalogues,...unique.values()];
   const finalMap=new Map();
   for(const x of merged){const key=x.url||[x.source,x.price,x.area,x.rooms,norm(x.title)].join('|');if(!finalMap.has(key))finalMap.set(key,x);}
   return [...finalMap.values()].slice(0,25);
