@@ -14,4 +14,4 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: JML_ENGINE_VERSION
-        value: "1.9.15"
+        value: "1.9.16"
