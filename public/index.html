@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.1 — DVF réelles · calibration transparente · caractéristiques documentées · écart fixe ±20 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.1 — DVF réelles · calibration transparente · caractéristiques documentées · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.estimate == null) throw new Error('Réponse serveur incomplète : estimation absente.');
     estimateValue = Number(d.estimate) || 0;
     setText('main', euro(d.estimate));
-    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 20000) + ')');
+    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 7000) + ')');
     setText('confidence', 'Fiabilité : ' + (d.confidence ?? '—') + '/100 · ' + (d.confidenceLevel || '—'));
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
