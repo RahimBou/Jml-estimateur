@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JML Immobilier — Estimateur V1.9.8 — DVF réelles · centre local robuste · DPE & caractéristiques · calibration transparente · écart fixe ±7 000 €</title>
+<title>JML Immobilier — Estimateur V1.9.9 — DVF réelles · centre local robuste · DPE & caractéristiques · calibration transparente · écart fixe ±7 000 €</title>
 <style>
 :root{--ink:#172033;--muted:#667085;--line:#dbe2ea;--paper:#fff;--bg:#f3f6f8;--brand:#173b2b;--soft:#edf5f0;--warn:#fff7df;--danger:#fff0f0}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
@@ -63,7 +63,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.9.8 — DVF réelles · surface hiérarchisée · centre local robuste · DPE & caractéristiques · écart fixe ±7 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V1.9.9 — DVF réelles · surface hiérarchisée · centre local robuste · DPE & caractéristiques · écart fixe ±7 000 €</div></div></div></header>
 
 <main>
 <form id="form">
@@ -144,7 +144,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 <p id="competitionError" class="hint">La recherche se lance automatiquement après l'estimation.</p>
 <div id="competitionSummary" class="competition-summary"></div>
 <div class="tablewrap">
-<table class="competition-table"><thead><tr><th>Source</th><th>Annonce</th><th>Prix</th><th>Surface</th><th>€/m²</th><th>Pièces</th><th>Secteur</th><th>Lien</th></tr></thead><tbody id="competitionBody"></tbody></table>
+<table class="competition-table"><thead><tr><th>Source</th><th>Annonce</th><th>Prix</th><th>Surface habitable</th><th>Terrain</th><th>€/m²</th><th>Pièces</th><th>Secteur</th><th>Lien</th></tr></thead><tbody id="competitionBody"></tbody></table>
 </div>
 <p class="competition-note">Cette liste présente des prix d'annonces actuellement affichés. Il ne s'agit pas de ventes réalisées et <b>aucune de ces annonces n'entre dans le calcul de l'estimation DVF.</b></p>
 </div>
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if(!competition.length){
       const tr=document.createElement('tr'),td=document.createElement('td');
-      td.colSpan=8;
+      td.colSpan=9;
       td.textContent='Aucune annonce exploitable trouvée dans les sources publiques accessibles pour cette commune et ce type de bien. Relancez la recherche si nécessaire.';
       tr.appendChild(td);body.appendChild(tr);
       return;
@@ -455,8 +455,9 @@ document.addEventListener('DOMContentLoaded', () => {
       appendCell(tr,x.source||'—');
       appendCell(tr,x.title||'Annonce immobilière');
       appendCell(tr,euro(x.price));
-      appendCell(tr,Math.round(x.area)+' m²');
-      appendCell(tr,Math.round(x.sqmPrice)+' €/m²');
+      appendCell(tr,x.area?Math.round(x.area)+' m²':'—');
+      appendCell(tr,x.landArea?Math.round(x.landArea)+' m²':'—');
+      appendCell(tr,x.sqmPrice?Math.round(x.sqmPrice)+' €/m²':'—');
       appendCell(tr,x.rooms?String(x.rooms):'—');
       appendCell(tr,x.locality||'—');
       const td=document.createElement('td');
