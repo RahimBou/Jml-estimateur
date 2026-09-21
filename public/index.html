@@ -34,6 +34,12 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 .competition-tools{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
 .competition-tools input{min-width:0}
 .competition-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.commercial-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.commercial-kpi{padding:14px;border:1px solid rgba(0,0,0,.08);border-radius:12px}
+.commercial-kpi b{display:block;font-size:1.15rem}
+.commercial-kpi span{display:block;font-size:.78rem;opacity:.7;margin-top:4px}
+.marketplace-btn{padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(0,0,0,.15)}
+@media(max-width:700px){.commercial-grid{grid-template-columns:1fr}}
 .competition-actions button,.print-btn{padding:10px 14px;border:0;border-radius:10px;cursor:pointer;font-weight:700}
 .competition-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.92rem}
 .competition-table th,.competition-table td{padding:8px;border-bottom:1px solid rgba(0,0,0,.08);text-align:left}
