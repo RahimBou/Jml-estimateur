@@ -329,7 +329,7 @@ function analyze(rows,input,geo){
       }]:[])
     ],
     comparables:{data:c.map(r=>({date:r.date,streetName:r.streetName,streetNumber:r.streetNumber,livingArea:r.area,rooms:r.rooms,landArea:r.landArea,price:r.price,sqmPrice:r.sqmPrice,distanceKm:r.distance,score:Math.round(r.score),ageMonths:Math.round(r.age),weight:Number(r.weight.toFixed(4))}))},
-    data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', ')}
+    data:{source:'DVF+ géolocalisées — données ouvertes',millime:YEARS.join(', '),engineVersion:'V1.6.1',localCenter:model.localCenterUsed}
   };
 }
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
