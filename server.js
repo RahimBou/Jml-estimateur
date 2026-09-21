@@ -370,7 +370,7 @@ const AGENCY_HOSTS=[
   'charleville-mezieres.guy-hoquet.com',
   'guy-hoquet.com','www.guy-hoquet.com',
   'citya.com','www.citya.com',
-  'charleville-arthurimmo.com','www.charleville-arthurimmo.com'
+  'charleville-arthurimmo.com','www.charleville-arthurimmo.com','heros-immobilier.com','www.heros-immobilier.com','alcimmo08.com','www.alcimmo08.com','bressy-immobilier.com','www.bressy-immobilier.com','ardenimmobilier.com','www.ardenimmobilier.com','mathieuimmobilier.fr','www.mathieuimmobilier.fr'
 ];
 function competitionHostAllowed(host){
   const h=String(host||'').toLowerCase();
@@ -713,7 +713,7 @@ function extractCompetitionCity(rawAddress){
 }
 
 
-const DIRECT_MARKET_CATALOGUES=[
+const DIRECT_MARKET_CATALOGUES=[{source:'Héros Immobilier',sourceType:'agence',urls:['https://www.heros-immobilier.com/agences/heros-immobilier-agence-charleville-mezieres/1']},{source:'ALC Immobilier',sourceType:'agence',urls:['https://www.alcimmo08.com/vente/1']},{source:'Dany Bressy Immobilier',sourceType:'agence',urls:['https://www.bressy-immobilier.com/']},{source:'Arden Immobilier',sourceType:'agence',urls:['https://www.ardenimmobilier.com/']},{source:'Mathieu Immobilier',sourceType:'agence',urls:['https://www.mathieuimmobilier.fr/']},{source:'Notaires — immobilier.notaires.fr',sourceType:'notaire',urls:['https://www.immobilier.notaires.fr/fr/annonces-immobilieres-notaires?departement=08']},
   {source:'JML Immobilier',urls:['https://www.jml-immobilier.fr/']},
   {source:'Toutabitat',urls:['https://www.toutabitat.com/immobiliers/achat','https://www.toutabitat.com/acheter']},
   {source:'Fischer Immobilier',urls:['https://www.fischer-immobilier.fr/immobiliers/achat','https://www.fischer-immobilier.fr/logements/liste']},
@@ -802,7 +802,7 @@ function listingFromCatalogueText(item,source){
   const code=text.match(cityCodes);
   let locality='';
   if(code){const pos=text.lastIndexOf(code[0]),before=text.slice(Math.max(0,pos-80),pos).trim(),m=before.match(/([A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’.-]+(?:[\s-]+[A-ZÀ-Ÿ][A-Za-zÀ-ÿ'’.-]+){0,4})\s*$/);if(m)locality=m[1].trim();}
-  return {source,sourceType:'agence',url:item.url,title,snippet,price,area,rooms:rooms[0]||0,landArea:land[0]||0,locality,sqmPrice:area?Math.round(price/area):0,importedAt:new Date().toISOString(),fromCatalogue:true,type};
+  return {source:source.source||source,sourceType:source.sourceType||'agence',url:item.url,title,snippet,price,area,rooms:rooms[0]||0,landArea:land[0]||0,locality,sqmPrice:area?Math.round(price/area):0,importedAt:new Date().toISOString(),fromCatalogue:true,type};
 }
 
 async function enrichCatalogueListing(item){
@@ -838,7 +838,7 @@ async function searchDirectAgencyCatalogues(input,city,typeLabel){
           /(prix|€|m²|maison|appartement|pavillon|terrain|immeuble|local|commerce|garage|parking|loft|studio|duplex)/.test(text);
       }).slice(0,30);
       for(const candidate of candidates){
-        const parsed=listingFromCatalogueText(candidate,source.source); if(!parsed)continue;
+        const parsed=listingFromCatalogueText(candidate,source); if(!parsed)continue;
         const text=norm(parsed.title+' '+parsed.snippet+' '+parsed.locality);
         const parsedType=parsed.type;
         const typeOk=parsedType===input.realtyType;
@@ -888,7 +888,7 @@ async function searchCompetitionListings(input){
     'justimmo08.fr','ill-immobilier.fr','rimbaudimmo.fr',
     'charlevillemezieres.stephaneplazaimmobilier.com',
     'charleville-mezieres.guy-hoquet.com','guy-hoquet.com','citya.com',
-    'charleville-arthurimmo.com'
+    'charleville-arthurimmo.com','heros-immobilier.com','alcimmo08.com','bressy-immobilier.com','ardenimmobilier.com','mathieuimmobilier.fr'
   ];
   const ardennesTowns=[
     'Charleville-Mézières','Sedan','Rethel','Givet','Revin','Vouziers',
@@ -988,7 +988,7 @@ async function searchCompetitionListings(input){
 
 function validate(p){if(!p||!String(p.address||'').trim())throw Error('L’adresse du bien est obligatoire.');if(!TYPES[p.realtyType])throw Error('Type de bien invalide.');const area=['land','agricultural_land'].includes(p.realtyType)?n(p.landArea):n(p.livingArea);if(area<=0)throw Error('La surface du bien est obligatoire.');return{...p,livingArea:n(p.livingArea),landArea:n(p.landArea),rooms:n(p.rooms)}}
 function send(res,status,data){res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))}
-function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(new URL(req.url,'http://localhost').pathname==='/'||new URL(req.url,'http://localhost').pathname==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();const result=analyze(rows,input,geo);if(!result.manual)result.location={city:geo.city||'',postal:geo.postal||'',label:geo.label||''};send(res,200,result)}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1.9.12 sur http://localhost:${port}`))}
+function startServer(port=PORT){return http.createServer((req,res)=>{if(req.method==='GET'&&(new URL(req.url,'http://localhost').pathname==='/'||new URL(req.url,'http://localhost').pathname==='/index.html')){try{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(path.join(__dirname,'public','index.html')))}catch(e){send(res,500,{error:'Interface introuvable.'})}return}if(req.method==='POST'&&req.url==='/api/competition/search'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listings=await searchCompetitionListings(p);send(res,200,{listings,searchedAt:new Date().toISOString(),criteria:{type:p.realtyType,area:n(p.livingArea)||n(p.landArea),rooms:n(p.rooms),city:extractCompetitionCity(p.city||p.address),source:'moteur de recherche web + annonces publiques indexées'},diagnostic:{city:extractCompetitionCity(p.city||p.address),resultCount:listings.length}})}catch(e){send(res,400,{error:e.message||'Erreur lors de la recherche des annonces actuelles.'})}});return}if(req.method==='POST'&&req.url==='/api/competition/import'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const p=JSON.parse(b||'{}');const listing=await importCompetitionListing(p.url);send(res,200,listing)}catch(e){send(res,400,{error:e.message||'Erreur lors de l’import de l’annonce.'})}});return}if(req.method==='POST'&&req.url==='/api/analyze'){let b='';req.on('data',c=>{b+=c;if(b.length>65536)req.destroy()});req.on('end',async()=>{try{const input=validate(JSON.parse(b||'{}')),geo=await geocode(input.address),rows=await loadDvf();const result=analyze(rows,input,geo);if(!result.manual)result.location={city:geo.city||'',postal:geo.postal||'',label:geo.label||''};send(res,200,result)}catch(e){send(res,400,{error:e.message||'Erreur inconnue.'})}});return}send(res,404,{error:'Route introuvable.'})}).listen(port,()=>console.log(`JML Estimateur V1.9.13 sur http://localhost:${port}`))}
 function mockRows(prefix=''){return[
 ['72','145000','2026-08-20','49.7705','4.7205','4','300','1'],['75','152000','2026-07-10','49.7710','4.7210','4','280','2'],['68','132000','2026-05-10','49.7720','4.7220','3','250','3'],['80','160000','2025-12-10','49.7730','4.7230','4','320','4'],['74','148000','2025-10-10','49.7740','4.7240','4','290','5']
 ].map(x=>row({id_mutation:prefix+'-m'+x[7],date_mutation:x[2],nature_mutation:'Vente',valeur_fonciere:x[1],adresse_numero:x[7],adresse_nom_voie:'Rue Test',code_postal:'08000',nom_commune:'Charleville-Mézières',id_parcelle:prefix+'-p'+x[7],type_local:'Maison',surface_reelle_bati:x[0],nombre_pieces_principales:x[5],surface_terrain:x[6],latitude:x[3],longitude:x[4]}))}
