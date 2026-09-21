@@ -785,9 +785,15 @@ function listingFromCatalogueText(item,source){
     const start=Math.max(0,m.index-70), end=Math.min(text.length,m.index+m[0].length+70);
     const before=text.slice(start,m.index).toLowerCase();
     const after=text.slice(m.index+m[0].length,end).toLowerCase();
-    const ctx=before+' '+after;
-    const landHint=/(?:terrain|parcelle|jardin|parc|propriete fonciere|surface du terrain)/i.test(ctx);
-    const livingHint=/(?:habitable|surface habitable|surface\s*:\s*|sh\b|loi carrez|carrez)/i.test(ctx);
+    // On ne regarde pas simplement toute la fenêtre : un mot "parc" situé
+    // après une surface habitable peut concerner la surface suivante.
+    // Le label doit être directement rattaché à la valeur.
+    const landBefore=/(?:terrain|parcelle|jardin|parc|surface du terrain)\s*(?:de|d['’]environ|d['’])?\s*$/i.test(before.slice(-40));
+    const landAfter=/^\s*(?:terrain|parcelle)\b/i.test(after);
+    const livingBefore=/(?:surface habitable|surface|habitable|loi carrez|carrez|sh)\s*[:=]?\s*$/i.test(before.slice(-35));
+    const livingAfter=/^\s*(?:m²|m2)?\s*(?:habitable|habitables|loi carrez|carrez)\b/i.test(after);
+    const landHint=landBefore||landAfter;
+    const livingHint=livingBefore||livingAfter;
     return {value:parseLooseNumber(m[1]),landHint,livingHint,index:m.index};
   }).filter(x=>x.value>=15&&x.value<=100000);
   const explicitLiving=contextualAreas.filter(x=>x.livingHint&&!x.landHint).map(x=>x.value).filter(x=>x<=10000);
