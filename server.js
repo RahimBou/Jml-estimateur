@@ -185,7 +185,7 @@ function analyze(rows,input,geo){
         ?model.primary.length+' ventes dans le cœur de surface, sur '+c.length+' comparables DVF retenus.'
         :c.length+' ventes réelles retenues après filtrage ; le cœur de surface ne contient que '+model.primary.length+' vente(s).'},
       ...(model.primary.length?[
-        {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'control',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
+        {name:'Cœur de surface DVF',value:Math.round((model.primarySqm||0)*area),weight:0,role:'cohort',reason:model.primary.length+' comparables à surface proche (seuil '+Math.round((t.type==='apartment'?.80:t.type==='house'?.75:.70)*100)+' %), utilisé comme socle lorsque le nombre est suffisant.'}
       ]:[]),
       ...(calibration.usable?[{name:'Calibration historique',value:estimate,weight:0,role:'adjustment',delta:estimate-baseEstimate,reason:calibration.samples+' ventes historiques testées hors échantillon · correction appliquée : '+(calibration.factor>=1?'+':'')+Math.round((calibration.factor-1)*1000)/10+' %.'}]:[]),
       {name:'Médiane locale de contrôle',value:Math.round(local*area),weight:0,role:'control',reason:'Contrôle de cohérence uniquement, jamais ajoutée au prix.'}
