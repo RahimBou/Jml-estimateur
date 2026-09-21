@@ -126,12 +126,15 @@ function estimateFromComparables(c,t,details=false){
     const dispersion=primaryMedian>0?primaryMad/primaryMedian:0;
     const divergence=localMedianSqm>0?(localMedianSqm-primarySqm)/localMedianSqm:0;
 
-    // V1.6 : lorsqu'un petit cœur local est hétérogène et que sa moyenne
-    // pondérée est nettement sous le niveau médian des ventes retenues,
-    // la médiane locale devient le centre robuste du marché.
+    // V1.6.2 : si le socle pondéré est nettement sous la médiane locale,
+    // la médiane devient le centre robuste du marché. Cela protège contre
+    // quelques ventes basses qui reçoivent trop de poids par récence/distance.
     // Cela évite qu'un petit groupe de ventes basses écrase deux ventes
     // très comparables dans une même micro-zone.
-    const localCenterUsed=dispersion>=0.10&&divergence>=0.12&&localMedianSqm>primarySqm;
+    const localCenterUsed=(
+      localMedianSqm>primarySqm &&
+      divergence>=0.10
+    );
     const chosenSqm=localCenterUsed?localMedianSqm:primarySqm;
     const estimate=Math.round(chosenSqm*t.area/1000)*1000;
 
