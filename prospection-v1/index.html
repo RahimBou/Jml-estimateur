@@ -1,80 +1,26 @@
 <!doctype html>
 <html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JML Prospection V1</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JML Prospection V1</title><link rel="stylesheet" href="./styles.css"></head>
 <body>
-  <header class="topbar">
-    <div>
-      <div class="brand">JML <span>PROSPECTION</span></div>
-      <div class="subtitle">Radar vendeurs · Ardennes</div>
-    </div>
-    <button id="addBtn" class="primary">+ Nouveau prospect</button>
-  </header>
-
-  <main class="container">
-    <section class="stats" aria-label="Tableau de bord">
-      <article><strong id="statTotal">0</strong><span>Prospects</span></article>
-      <article><strong id="statNew">0</strong><span>Nouveaux</span></article>
-      <article><strong id="statFollow">0</strong><span>À relancer</span></article>
-      <article><strong id="statMandates">0</strong><span>Mandats</span></article>
-    </section>
-
-    <section class="panel search-panel">
-      <div class="panel-title">
-        <div><h1>Recherche</h1><p>Filtre les biens enregistrés sans perdre l'historique.</p></div>
-        <button id="resetBtn" class="ghost">Réinitialiser</button>
-      </div>
-      <div class="filters">
-        <label>Recherche générale<input id="q" placeholder="Adresse, commune, description…"></label>
-        <label>Commune<input id="city" placeholder="Charleville-Mézières"></label>
-        <label>Type
-          <select id="type"><option value="">Tous</option><option>Maison</option><option>Appartement</option><option>Immeuble</option><option>Terrain</option><option>Garage</option><option>Local commercial</option><option>Autre</option></select>
-        </label>
-        <label>Statut
-          <select id="status"><option value="">Tous</option><option>Nouveau</option><option>À contacter</option><option>Visité</option><option>Pas encore en vente</option><option>À relancer</option><option>Mandat obtenu</option><option>Mandat refusé</option><option>Vendu / abandonné</option></select>
-        </label>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-title">
-        <div><h1>Prospects</h1><p id="resultCount">0 résultat</p></div>
-        <select id="sort" class="sort"><option value="recent">Plus récents</option><option value="follow">Relances proches</option><option value="city">Commune</option><option value="price">Prix</option></select>
-      </div>
-      <div id="list" class="cards"></div>
-      <div id="empty" class="empty">Aucun prospect. Commence par ajouter un bien.</div>
-    </section>
-  </main>
-
-  <dialog id="dialog">
-    <form id="prospectForm" method="dialog">
-      <div class="dialog-head"><h2 id="dialogTitle">Nouveau prospect</h2><button type="button" id="closeBtn" class="icon">×</button></div>
-      <input type="hidden" id="editId">
-      <div class="form-grid">
-        <label>Adresse*<input id="address" required></label>
-        <label>Commune*<input id="formCity" required></label>
-        <label>Quartier<input id="district"></label>
-        <label>Type<select id="formType"><option>Maison</option><option>Appartement</option><option>Immeuble</option><option>Terrain</option><option>Garage</option><option>Local commercial</option><option>Autre</option></select></label>
-        <label>Surface habitable (m²)<input id="area" type="number" min="0"></label>
-        <label>Terrain (m²)<input id="land" type="number" min="0"></label>
-        <label>Pièces<input id="rooms" type="number" min="0"></label>
-        <label>Chambres<input id="bedrooms" type="number" min="0"></label>
-        <label>Prix (€)<input id="price" type="number" min="0"></label>
-        <label>DPE<select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></label>
-        <label>Statut<select id="formStatus"><option>Nouveau</option><option>À contacter</option><option>Visité</option><option>Pas encore en vente</option><option>À relancer</option><option>Mandat obtenu</option><option>Mandat refusé</option><option>Vendu / abandonné</option></select></label>
-        <label>Prochaine relance<input id="nextFollow" type="date"></label>
-        <label class="full">Source / lien public<input id="sourceUrl" type="url" placeholder="https://…"></label>
-        <label class="full">Description / signal<textarea id="description" rows="3" placeholder="Pourquoi ce bien est intéressant, signal détecté, état, contexte…"></textarea></label>
-        <label class="full">Notes commerciales<textarea id="notes" rows="3" placeholder="Visite, échanges, objections, prochaine action…"></textarea></label>
-      </div>
-      <div class="dialog-actions"><button type="button" id="cancelBtn" class="ghost">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
-    </form>
-  </dialog>
-
-  <script src="./app.js"></script>
-</body>
-</html>
+<header class="topbar"><div><div class="brand">JML <span>PROSPECTION</span></div><div class="subtitle">Radar vendeurs · Ardennes</div></div><button id="addBtn" class="primary">+ Nouveau prospect</button></header>
+<main class="container">
+<section class="stats" aria-label="Tableau de bord"><article><strong id="statTotal">0</strong><span>Prospects</span></article><article><strong id="statNew">0</strong><span>Nouveaux</span></article><article><strong id="statFollow">0</strong><span>À relancer</span></article><article><strong id="statMandates">0</strong><span>Mandats</span></article></section>
+<section class="panel search-panel"><div class="panel-title"><div><h1>Recherche</h1><p>Filtre les biens enregistrés sans perdre l'historique.</p></div><button id="resetBtn" class="ghost">Réinitialiser</button></div>
+<div class="filters"><label>Recherche générale<input id="q" placeholder="Adresse, commune, description…"></label><label>Commune<input id="city" placeholder="Charleville-Mézières"></label><label>Type<select id="type"><option value="">Tous</option><option>Maison</option><option>Appartement</option><option>Immeuble</option><option>Terrain</option><option>Garage</option><option>Local commercial</option><option>Autre</option></select></label><label>Statut<select id="status"><option value="">Tous</option><option>Nouveau</option><option>À contacter</option><option>Visité</option><option>Pas encore en vente</option><option>À relancer</option><option>Mandat obtenu</option><option>Mandat refusé</option><option>Vendu / abandonné</option></select></label></div></section>
+<section class="panel"><div class="panel-title"><div><h1>Prospects</h1><p id="resultCount">0 résultat</p></div><select id="sort" class="sort"><option value="recent">Plus récents</option><option value="follow">Relances proches</option><option value="city">Commune</option><option value="price">Prix</option></select></div><div id="list" class="cards"></div><div id="empty" class="empty">Aucun prospect. Commence par ajouter un bien.</div></section>
+</main>
+<dialog id="dialog"><form id="prospectForm" method="dialog"><div class="dialog-head"><h2 id="dialogTitle">Nouveau prospect</h2><button type="button" id="closeBtn" class="icon">×</button></div><input type="hidden" id="editId">
+<div class="form-grid">
+<label>Adresse*<input id="address" required></label><label>Commune*<input id="formCity" required></label><label>Quartier<input id="district"></label>
+<label>Type<select id="formType"><option>Maison</option><option>Appartement</option><option>Immeuble</option><option>Terrain</option><option>Garage</option><option>Local commercial</option><option>Autre</option></select></label>
+<label>Surface habitable (m²)<input id="area" type="number" min="0"></label><label>Terrain (m²)<input id="land" type="number" min="0"></label><label>Pièces<input id="rooms" type="number" min="0"></label><label>Chambres<input id="bedrooms" type="number" min="0"></label><label>Prix (€)<input id="price" type="number" min="0"></label>
+<label>DPE<select id="dpe"><option value="">Non renseigné</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option></select></label>
+<label>Statut<select id="formStatus"><option>Nouveau</option><option>À contacter</option><option>Visité</option><option>Pas encore en vente</option><option>À relancer</option><option>Mandat obtenu</option><option>Mandat refusé</option><option>Vendu / abandonné</option></select></label>
+<label>Prochaine relance<input id="nextFollow" type="date"></label>
+<label class="full">Source / lien public<input id="sourceUrl" type="url" placeholder="https://…"></label>
+<label class="full">Description / signal<textarea id="description" rows="3" placeholder="Pourquoi ce bien est intéressant, signal détecté, état, contexte…"></textarea></label>
+<label class="full">Nouvelle action / note<textarea id="actionNote" rows="3" placeholder="Ex. Visite effectuée. Propriétaire intéressé, relance le 15/10."></textarea></label>
+</div>
+<section class="history-box"><h3>Historique commercial</h3><div id="history"></div></section>
+<div class="dialog-actions"><button type="button" id="cancelBtn" class="ghost">Annuler</button><button class="primary" type="submit">Enregistrer</button></div></form></dialog>
+<script src="./app.js"></script></body></html>
