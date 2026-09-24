@@ -33,7 +33,7 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V8 FEUILLE BLANCHE — DVF réelles · tendance locale · écart fixe ±20 000 €</div></div></div></header>
+<header><div class="wrap"><div class="logo">JML</div><div><div class="title">Estimateur JML Immobilier</div><div class="sub">V7.4 PRO — DVF réelles · comparables pondérés · analyse du marché</div></div></div></header>
 
 <main>
 <form id="form">
@@ -87,6 +87,16 @@ button:disabled{opacity:.55;cursor:wait}.error{background:var(--danger);color:#8
 </div>
 </div>
 
+<div class="card">
+<h2>📈 Analyse du marché</h2>
+<div class="facts">
+<div class="fact"><b id="marketMedian">—</b><span>Médiane DVF comparable</span></div>
+<div class="fact"><b id="marketWeighted">—</b><span>Valeur pondérée</span></div>
+<div class="fact"><b id="marketPosition">—</b><span>Position par rapport à la médiane</span></div>
+</div>
+<div id="marketDetails" class="footer-note"></div>
+</div>
+
 <div class="card"><h2>📊 D'où vient le prix ?</h2><div id="sources" class="sources"></div><div id="adjustments" class="footer-note"></div><div id="warning" class="error" style="display:none"></div><p id="method" class="footer-note"></p></div>
 
 <div class="card"><h2>📍 Comparables réels</h2><p id="selection" class="hint"></p><div class="tablewrap"><table class="tx"><thead><tr><th>Date</th><th>Rue</th><th>Surface</th><th>Prix</th><th>€/m²</th><th>Distance</th></tr></thead><tbody id="txBody"></tbody></table></div></div>
@@ -124,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const requiredIds = [
     'form','error','loading','submit','result','main','range','confidence',
     'ppsm','txCount','window','sources','method','selection','txBody',
-    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning',
+    'showCompare','compare','ownerPrice','compareBtn','comparison','adjustments','warning','marketMedian','marketWeighted','marketPosition','marketDetails',
     'address','realtyType','livingArea','landArea','rooms','bathrooms',
     'constructionYear','dpe','condition','garage','parking','cellar',
     'terrace','patio','niceView'
@@ -299,13 +309,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.estimate == null) throw new Error('Réponse serveur incomplète : estimation absente.');
     estimateValue = Number(d.estimate) || 0;
     setText('main', euro(d.estimate));
-    setText('range', 'Fourchette fixe : ' + euro(d.low) + ' → ' + euro(d.high) + ' (± ' + euro(d.rangeEur || 20000) + ')');
+    setText('range', 'Fourchette de confiance : ' + euro(d.low) + ' → ' + euro(d.high) + ' (' + Math.round((Number(d.spread)||0)*100) + '%)');
     setText('confidence', 'Fiabilité : ' + (d.confidence ?? '—') + '/100 · ' + (d.confidenceLevel || '—'));
     const label=d.statistics?.metricLabel || '€/m²';
     setText('ppsm', label==='€/m²' ? (new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0}).format(Number(d.statistics?.weightedMetric)||0)+' €/m²') : euro(d.statistics?.weightedMetric));
     setText('txCount', String(d.selection?.retained || 0));
     setText('window', (() => { const km = Number(d.selection?.radiusKm); if (!Number.isFinite(km)) return '—'; const m = Math.round(km * 1000); return m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : m + ' m'; })());
     setText('selection', (d.selection?.directComparables || 0) + ' comparables directs · ' + (d.selection?.retained || 0) + ' retenus · filtre ' + (d.selection?.filter || '—'));
+    if (d.marketAnalysis) {
+      setText('marketMedian', euro(d.marketAnalysis.medianValue));
+      setText('marketWeighted', euro(d.marketAnalysis.weightedValue));
+      setText('marketPosition', d.marketAnalysis.position || '—');
+      const ma=d.marketAnalysis;
+      setText('marketDetails',
+        (ma.comparableCount || 0) + ' ventes retenues · ' +
+        (ma.recentCount || 0) + ' de moins de 12 mois · ' +
+        (ma.radiusKm != null ? 'rayon utilisé : ' + (ma.radiusKm < 1 ? Math.round(ma.radiusKm*1000) + ' m' : ma.radiusKm.toFixed(1).replace('.',',') + ' km') : '') +
+        (ma.divergencePct != null ? ' · écart valeur pondérée / médiane : ' + (ma.divergencePct >= 0 ? '+' : '') + ma.divergencePct + '%' : '') +
+        (ma.dispersionPct != null ? ' · dispersion : ' + ma.dispersionPct + '%' : '')
+      );
+    }
     setText('method', (d.method || '') + ' Données : ' + (d.data?.millime || '—') + ' · ' + (d.data?.source || 'DVF') + '.');
     if (d.statistics?.trendAnnualPct != null) {
       const t = Number(d.statistics.trendAnnualPct);
