@@ -1,4 +1,4 @@
-// JML Immobilier — Estimateur V7.2 PRO DVF
+// JML Immobilier — Estimateur V7.4 PRO DVF
 // Moteur professionnel : DVF+ géolocalisé, comparables multi-niveaux,
 // correction temporelle, gestion des mutations, score de similarité,
 // double contrôle et corrections JML clairement séparées des données DVF.
@@ -22,7 +22,7 @@ const GEO_CACHE = new Map();
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const CURRENT_DATA_YEAR = Number(process.env.CURRENT_DATA_YEAR || 2025);
 const DATA_MILLIME = process.env.DVF_MILLIME || 'avril 2026';
-const ENGINE_VERSION = '7.3.0-PRO-DVF';
+const ENGINE_VERSION = '7.4.0-PRO-DVF';
 const MAX_COMPARABLE_AGE_MONTHS = Number(process.env.MAX_COMPARABLE_AGE_MONTHS || 24);
 const RECENT_AGE_MONTHS = Number(process.env.RECENT_AGE_MONTHS || 12);
 
@@ -73,7 +73,7 @@ function parseCsvLine(line){
 async function fetchBuffer(url){
   const ac=new AbortController(); const timer=setTimeout(()=>ac.abort(),DOWNLOAD_TIMEOUT_MS);
   try{
-    const r=await fetch(url,{signal:ac.signal,headers:{'User-Agent':'JML-Immobilier-Estimateur/7.2'}});
+    const r=await fetch(url,{signal:ac.signal,headers:{'User-Agent':'JML-Immobilier-Estimateur/7.4'}});
     if(!r.ok) throw new Error(`DVF HTTP ${r.status}`);
     return Buffer.from(await r.arrayBuffer());
   } finally { clearTimeout(timer); }
@@ -358,6 +358,25 @@ async function estimate(payload){
   const displayed=filtered.items.slice().sort((a,b)=>b.weight-a.weight).slice(0,15).map(x=>({date:x.date,price:x.price,sqmPrice:cfg.ppsm?round100(x.adjustedMetric||x.metric):null,metric:round100(x.adjustedMetric||x.metric),livingArea:x.area,landArea:x.land,rooms:x.rooms,distanceKm:Number(x.distanceKm.toFixed(2)),ageMonths:Number((x.ageMonths||0).toFixed(1)),score:x.score,influence:x.weight,adjustmentFactor:x.adjustmentFactor,streetName:x.street,streetNumber:x.number,nature:x.nature,type:x.type_local,temporalFactor:x.temporalFactor}));
   const totalWeight=filtered.items.reduce((s,x)=>s+x.weight,0)||1;
   displayed.forEach(x=>x.influence=Number((x.influence/totalWeight*100).toFixed(1)));
+  const recentCount=filtered.items.filter(x=>Number(x.ageMonths)<=RECENT_AGE_MONTHS).length;
+  const olderCount=filtered.items.length-recentCount;
+  const marketPosition=marketControl>0 ? (
+    baseValue < marketControl*0.97 ? 'sous la médiane DVF' :
+    baseValue > marketControl*1.03 ? 'au-dessus de la médiane DVF' : 'proche de la médiane DVF'
+  ) : 'non déterminable';
+  const marketAnalysis={
+    medianValue:round100(marketControl),
+    weightedValue:round100(baseValue),
+    divergencePct:divergence==null?null:Math.round((baseValue/marketControl-1)*100),
+    position:marketPosition,
+    comparableCount:filtered.items.length,
+    recentCount,
+    olderCount,
+    radiusKm:selection.radiusKm,
+    dispersionPct:local.dispersion==null?null:Math.round(local.dispersion*100),
+    q1:cfg.ppsm?round100(local.q1*area):round100(local.q1),
+    q3:cfg.ppsm?round100(local.q3*area):round100(local.q3)
+  };
   const signals=[
     formatSignal('Comparables DVF pondérés',round100(baseValue),100,`${filtered.items.length} ventes retenues, dont ${direct} très comparables`),
     formatSignal('Médiane locale DVF',round100(marketControl),0,'Contrôle de cohérence uniquement ; elle n’est pas ajoutée une seconde fois au prix final')
@@ -369,6 +388,7 @@ async function estimate(payload){
     data:{department:DVF_DEPT,years:loaded,millime:DATA_MILLIME,source:'DVF+ open-data / DGFiP'},
     selection:{radiusKm:selection.radiusKm,totalCandidates:selection.items.length,retained:filtered.items.length,directComparables:direct,filter:filtered.mode,maxAgeMonths:MAX_COMPARABLE_AGE_MONTHS,recentPriorityMonths:RECENT_AGE_MONTHS},
     statistics:{metricLabel:metricLabel(type),weightedMetric:weighted,medianMetric:local.median,adjustedMedianMetric:marketMetric,q1:local.q1,q3:local.q3,dispersion:local.dispersion,marketControlValue:marketControl,baseValue,adjustmentPct:jml.pct},
+    marketAnalysis,
     adjustments:jml.lines,
     divergencePct:divergence==null?null:Math.round(divergence*100), warning,
     sources:signals,
@@ -384,5 +404,5 @@ app.post('/api/analyze',async(req,res)=>{
   catch(e){ res.status(400).json({error:e.message||'Erreur inconnue',version:ENGINE_VERSION}); }
 });
 
-if(require.main===module){ app.listen(PORT,()=>console.log(`JML Estimateur V7.3 PRO DVF — comparables <= ${MAX_COMPARABLE_AGE_MONTHS} mois — http://localhost:${PORT}`)); }
+if(require.main===module){ app.listen(PORT,()=>console.log(`JML Estimateur V7.4 PRO DVF — comparables <= ${MAX_COMPARABLE_AGE_MONTHS} mois — http://localhost:${PORT}`)); }
 module.exports={median,percentile,adaptiveComparables,iqrFilter,buildConfidence,jmlAdjustments,TYPE_CONFIG,estimate,MAX_COMPARABLE_AGE_MONTHS};
